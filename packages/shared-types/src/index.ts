@@ -23,7 +23,8 @@ export interface CreateAssetRequest {
     originalname: string;
     mimetype: string;
     size: number;
-    buffer: Uint8Array;
+    buffer?: Uint8Array;
+    path?: string;
   }>;
   tags?: string[];
   category?: string;

@@ -1,5 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { extname, join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { AssetsController } from "../controllers/assets.controller.js";
 import { AnalyticsController } from "../controllers/analytics.controller.js";
 import { AssetRepository } from "../repositories/asset.repository.js";
@@ -20,10 +24,17 @@ export function createAssetRouter() {
   const service = new AssetService(repository, queue, storage, analyticsService);
   const controller = new AssetsController(service);
   const analyticsController = new AnalyticsController(analyticsService);
+  const uploadTempDir = process.env.UPLOAD_TEMP_DIR ?? join(tmpdir(), "dam-platform", "uploads");
+  mkdirSync(uploadTempDir, { recursive: true });
   const upload = multer({
-    storage: multer.memoryStorage(),
+    storage: multer.diskStorage({
+      destination: uploadTempDir,
+      filename: (_req, file, callback) => {
+        callback(null, `${Date.now()}-${randomUUID()}${extname(file.originalname)}`);
+      }
+    }),
     limits: {
-      files: 10,
+      files: Number(process.env.MAX_ASSET_FILES ?? 10),
       fileSize: Number(process.env.MAX_ASSET_FILE_SIZE_BYTES ?? 1024 * 1024 * 500)
     }
   });

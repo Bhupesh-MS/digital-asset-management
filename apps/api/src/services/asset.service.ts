@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 import type { AssetDto, AssetType, CreateAssetRequest, CreateAssetResponse } from "@dam/shared-types";
 import type { StorageClient } from "@dam/storage";
 import { logger } from "@dam/logger";
@@ -8,8 +10,9 @@ import { HttpError } from "../utils/http-error.js";
 import { AnalyticsService } from "./analytics.service.js";
 
 const SUPPORTED_MIME_PREFIXES = ["image/", "video/"];
-const MAX_FILES = 10;
+const MAX_FILES = Number(process.env.MAX_ASSET_FILES ?? 10);
 const MAX_FILE_SIZE_BYTES = Number(process.env.MAX_ASSET_FILE_SIZE_BYTES ?? 1024 * 1024 * 500);
+const UPLOAD_STREAM_CHUNK_SIZE_BYTES = Number(process.env.UPLOAD_STREAM_CHUNK_SIZE_BYTES ?? 1024 * 1024 * 8);
 
 export interface AssetListRequest {
   page?: unknown;
@@ -76,12 +79,12 @@ export class AssetService {
       validateUploadFile(file);
 
       const type = getAssetType(file.mimetype);
-      const checksumSha256 = createHash("sha256").update(file.buffer).digest("hex");
+      const checksumSha256 = await createUploadChecksum(file);
       const filename = sanitizeFilename(file.originalname);
       const objectKey = `uploads/${new Date().toISOString().slice(0, 10)}/${randomBytes(8).toString("hex")}-${filename}`;
       const tags = buildAutoTags(filename, file.mimetype, type, requestedTags);
 
-      await this.storage.putObject(objectKey, Buffer.from(file.buffer), file.size, {
+      await this.storage.putObject(objectKey, createUploadReadStream(file), file.size, {
         "Content-Type": file.mimetype
       });
 
@@ -200,8 +203,10 @@ export class AssetService {
   }
 }
 
-function validateUploadFile(file: CreateAssetRequest["files"][number]) {
-  if (!file.originalname || !file.mimetype || !file.size || !file.buffer) {
+type UploadFile = CreateAssetRequest["files"][number];
+
+function validateUploadFile(file: UploadFile) {
+  if (!file.originalname || !file.mimetype || !file.size || (!file.buffer && !file.path)) {
     throw new HttpError(400, "Each file must include filename, MIME type, size, and content");
   }
 
@@ -212,6 +217,24 @@ function validateUploadFile(file: CreateAssetRequest["files"][number]) {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     throw new HttpError(400, `File size must not exceed ${MAX_FILE_SIZE_BYTES} bytes`);
   }
+}
+
+async function createUploadChecksum(file: UploadFile) {
+  const hash = createHash("sha256");
+
+  for await (const chunk of createUploadReadStream(file)) {
+    hash.update(chunk);
+  }
+
+  return hash.digest("hex");
+}
+
+function createUploadReadStream(file: UploadFile): Readable {
+  if (file.path) {
+    return createReadStream(file.path, { highWaterMark: UPLOAD_STREAM_CHUNK_SIZE_BYTES });
+  }
+
+  return Readable.from(file.buffer ?? []);
 }
 
 function getAssetType(mimeType: string): AssetType {
