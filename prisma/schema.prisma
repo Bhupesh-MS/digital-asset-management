@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./../packages/db/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+
+  @@map("user_role")
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  OTHER
+
+  @@map("asset_type")
+}
+
+enum AssetStatus {
+  UPLOADED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+  ARCHIVED
+
+  @@map("asset_status")
+}
+
+enum StorageProvider {
+  MINIO
+
+  @@map("storage_provider")
+}
+
+enum AssetObjectKind {
+  ORIGINAL
+  THUMBNAIL
+  PREVIEW
+  TRANSCODED
+
+  @@map("asset_object_kind")
+}
+
+enum ProcessingJobType {
+  GENERATE_THUMBNAIL
+  TRANSCODE_VIDEO
+  EXTRACT_METADATA
+  AUTO_TAG
+
+  @@map("processing_job_type")
+}
+
+enum ProcessingJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+
+  @@map("processing_job_status")
+}
+
+enum ShareLinkStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+
+  @@map("share_link_status")
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  password    String
+  role        UserRole     @default(USER)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  uploads     Asset[]      @relation("AssetUploader")
+  shareLinks  ShareLink[]
+
+  @@index([role])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Asset {
+  id                 String          @id @default(cuid())
+  filename           String
+  originalFilename   String          @map("original_filename")
+  mimeType           String          @map("mime_type")
+  type               AssetType
+  sizeBytes          BigInt          @map("size_bytes")
+  checksumSha256     String?         @unique @map("checksum_sha256")
+  status             AssetStatus     @default(QUEUED)
+  storageProvider    StorageProvider @default(MINIO) @map("storage_provider")
+  bucket             String
+  objectKey          String          @unique @map("object_key")
+  previewObjectKey   String?         @map("preview_object_key")
+  thumbnailObjectKey String?         @map("thumbnail_object_key")
+  uploadedById       String?         @map("uploaded_by_id")
+  uploadedBy         User?           @relation("AssetUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  metadata           AssetMetadata?
+  objects            AssetObject[]
+  tags               AssetTag[]
+  categories         AssetCategory[]
+  processingJobs     ProcessingJob[]
+  shareLinks         ShareLink[]
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+  @@index([uploadedById, createdAt])
+  @@index([mimeType])
+  @@index([filename])
+  @@map("assets")
+}
+
+model AssetMetadata {
+  id              String   @id @default(cuid())
+  assetId         String   @unique @map("asset_id")
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  width           Int?
+  height          Int?
+  durationSeconds Decimal? @map("duration_seconds") @db.Decimal(12, 3)
+  frameRate       Decimal? @map("frame_rate") @db.Decimal(8, 3)
+  bitrate         BigInt?
+  codec           String?
+  colorSpace      String?  @map("color_space")
+  pageCount       Int?     @map("page_count")
+  extractedText   String?  @map("extracted_text")
+  raw             Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("asset_metadata")
+}
+
+model AssetObject {
+  id              String          @id @default(cuid())
+  assetId         String          @map("asset_id")
+  asset           Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  kind            AssetObjectKind
+  storageProvider StorageProvider @default(MINIO) @map("storage_provider")
+  bucket          String
+  objectKey       String          @unique @map("object_key")
+  mimeType        String          @map("mime_type")
+  sizeBytes       BigInt          @map("size_bytes")
+  width           Int?
+  height          Int?
+  durationSeconds Decimal?        @map("duration_seconds") @db.Decimal(12, 3)
+  resolutionLabel String          @default("") @map("resolution_label")
+  checksumSha256  String?         @map("checksum_sha256")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@unique([assetId, kind, resolutionLabel])
+  @@index([assetId, kind])
+  @@map("asset_objects")
+}
+
+model Tag {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  assets    AssetTag[]
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("tags")
+}
+
+model Category {
+  id        String          @id @default(cuid())
+  name      String
+  slug      String          @unique
+  assets    AssetCategory[]
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("categories")
+}
+
+model AssetTag {
+  assetId   String   @map("asset_id")
+  tagId     String   @map("tag_id")
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  source    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([assetId, tagId])
+  @@index([tagId])
+  @@map("asset_tags")
+}
+
+model AssetCategory {
+  assetId    String   @map("asset_id")
+  categoryId String   @map("category_id")
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([assetId, categoryId])
+  @@index([categoryId])
+  @@map("asset_categories")
+}
+
+model ProcessingJob {
+  id          String              @id @default(cuid())
+  assetId     String              @map("asset_id")
+  asset       Asset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  type        ProcessingJobType
+  status      ProcessingJobStatus @default(PENDING)
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(3) @map("max_attempts")
+  priority    Int                 @default(0)
+  payload     Json?
+  result      Json?
+  error       String?
+  queuedAt    DateTime            @default(now()) @map("queued_at")
+  startedAt   DateTime?           @map("started_at")
+  finishedAt  DateTime?           @map("finished_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([status, priority, queuedAt])
+  @@index([assetId, type])
+  @@map("processing_jobs")
+}
+
+model ShareLink {
+  id          String          @id @default(cuid())
+  assetId     String          @map("asset_id")
+  asset       Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  tokenHash   String          @unique @map("token_hash")
+  status      ShareLinkStatus @default(ACTIVE)
+  createdById String?         @map("created_by_id")
+  createdBy   User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  expiresAt   DateTime?       @map("expires_at")
+  revokedAt   DateTime?       @map("revoked_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([assetId, status])
+  @@index([expiresAt])
+  @@map("share_links")
+}
