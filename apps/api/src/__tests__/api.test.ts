@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Router } from "express";
 import request from "supertest";
 import bcrypt from "bcryptjs";
@@ -79,6 +82,60 @@ test("POST /assets uploads multiple files and queues processing", async () => {
   assert.equal(queueJobs.length, 2);
   assert.equal(storedObjects.length, 2);
   assert.deepEqual(response.body.data.assets[0].tags.includes("campaign"), true);
+});
+
+test("AssetService streams disk-backed uploads to storage", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "dam-upload-test-"));
+  const uploadPath = join(uploadDir, "large-image.jpg");
+  const uploadContent = Buffer.from("image-content-streamed-in-chunks");
+  await writeFile(uploadPath, uploadContent);
+
+  const storedObjects: Buffer[] = [];
+  const queueJobs: unknown[] = [];
+  const analytics = new AnalyticsService();
+  const repository = createAssetRepository();
+  const queue = {
+    enqueueProcessing: async (job: unknown) => {
+      queueJobs.push(job);
+    }
+  };
+  const storage = {
+    bucket: "test-bucket",
+    ensureBucket: async () => undefined,
+    putObject: async (_objectKey: string, data: Buffer | NodeJS.ReadableStream) => {
+      if (Buffer.isBuffer(data)) {
+        storedObjects.push(data);
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of data) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      storedObjects.push(Buffer.concat(chunks));
+    },
+    presignedGetUrl: async (objectKey: string) => `https://storage.test/${objectKey}`
+  };
+  const service = new AssetService(repository as never, queue as never, storage as never, analytics);
+
+  try {
+    const response = await service.createAssets({
+      files: [
+        {
+          originalname: "large-image.jpg",
+          mimetype: "image/jpeg",
+          size: uploadContent.length,
+          path: uploadPath
+        }
+      ]
+    });
+
+    assert.equal(response.success, true);
+    assert.equal(queueJobs.length, 1);
+    assert.deepEqual(storedObjects, [uploadContent]);
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
 });
 
 test("GET /assets returns five-item pagination metadata", async () => {
