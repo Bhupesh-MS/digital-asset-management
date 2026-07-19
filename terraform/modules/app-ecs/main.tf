@@ -176,6 +176,38 @@ resource "aws_ecs_service" "this" {
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
+  dynamic "load_balancer" {
+    for_each = var.web_target_group_arn == null ? [] : [var.web_target_group_arn]
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = "web"
+      container_port   = var.web_port
+    }
+  }
+
+  dynamic "load_balancer" {
+    for_each = var.api_target_group_arn == null ? [] : [var.api_target_group_arn]
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = "api"
+      container_port   = var.api_port
+    }
+  }
+
+  dynamic "load_balancer" {
+    for_each = var.minio_target_group_arn == null ? [] : [var.minio_target_group_arn]
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = "minio"
+      container_port   = var.minio_port
+    }
+  }
+
+  health_check_grace_period_seconds = var.web_target_group_arn == null && var.api_target_group_arn == null && var.minio_target_group_arn == null ? null : 120
+
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids
