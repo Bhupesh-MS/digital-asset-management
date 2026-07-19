@@ -1,11 +1,6 @@
 resource "aws_efs_access_point" "this" {
   file_system_id = var.efs_file_system_id
 
-  posix_user {
-    gid = 999
-    uid = 999
-  }
-
   root_directory {
     path = "/rabbitmq"
 
