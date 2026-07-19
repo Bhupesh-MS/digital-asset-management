@@ -18,10 +18,10 @@ Add these repository or environment secrets for `develop`:
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `DATABASE_PASSWORD` using 8-128 printable ASCII characters, excluding `/`, `@`, double quotes, and spaces. Example safe character set: letters, numbers, `_`, `-`, `.`, `#`, `%`, `+`, `=`.
-- `RABBITMQ_PASSWORD`
-- `MINIO_ACCESS_KEY`
-- `MINIO_SECRET_KEY`
-- `JWT_SECRET`
+- `RABBITMQ_PASSWORD` with at least 1 character
+- `MINIO_ACCESS_KEY` with at least 3 characters
+- `MINIO_SECRET_KEY` with at least 8 characters
+- `JWT_SECRET` with at least 32 characters
 
 ## GitHub Variables
 

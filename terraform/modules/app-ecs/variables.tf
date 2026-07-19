@@ -101,18 +101,33 @@ variable "minio_access_key" {
   description = "MinIO root/access key."
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.minio_access_key) >= 3
+    error_message = "MinIO access key must be at least 3 characters."
+  }
 }
 
 variable "minio_secret_key" {
   description = "MinIO root/secret key."
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.minio_secret_key) >= 8
+    error_message = "MinIO secret key must be at least 8 characters."
+  }
 }
 
 variable "jwt_secret" {
   description = "JWT signing secret."
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.jwt_secret) >= 32
+    error_message = "JWT secret must be at least 32 characters."
+  }
 }
 
 variable "cors_origin" {
@@ -220,6 +235,11 @@ variable "rabbitmq_password" {
   description = "RabbitMQ default password."
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.rabbitmq_password) >= 1
+    error_message = "RabbitMQ password must be set and cannot be empty."
+  }
 }
 
 variable "aws_region" {

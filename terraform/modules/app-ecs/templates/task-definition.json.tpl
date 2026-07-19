@@ -9,6 +9,13 @@
     "mountPoints": [
       { "sourceVolume": "redis-data", "containerPath": "/data", "readOnly": false }
     ],
+    "healthCheck": {
+      "command": ["CMD-SHELL", "redis-cli ping | grep PONG"],
+      "interval": 10,
+      "timeout": 5,
+      "retries": 6,
+      "startPeriod": 30
+    },
     "logConfiguration": ${log_configuration}
   },
   {
@@ -23,6 +30,13 @@
     "mountPoints": [
       { "sourceVolume": "rabbitmq-data", "containerPath": "/var/lib/rabbitmq", "readOnly": false }
     ],
+    "healthCheck": {
+      "command": ["CMD-SHELL", "rabbitmq-diagnostics -q ping"],
+      "interval": 10,
+      "timeout": 5,
+      "retries": 12,
+      "startPeriod": 60
+    },
     "logConfiguration": ${log_configuration}
   },
   {
@@ -49,8 +63,8 @@
       { "containerPort": ${api_port}, "protocol": "tcp" }
     ],
     "dependsOn": [
-      { "containerName": "redis", "condition": "START" },
-      { "containerName": "rabbitmq", "condition": "START" },
+      { "containerName": "redis", "condition": "HEALTHY" },
+      { "containerName": "rabbitmq", "condition": "HEALTHY" },
       { "containerName": "minio", "condition": "START" }
     ],
     "logConfiguration": ${log_configuration}
@@ -61,7 +75,7 @@
     "essential": true,
     "environment": ${worker_environment},
     "dependsOn": [
-      { "containerName": "rabbitmq", "condition": "START" },
+      { "containerName": "rabbitmq", "condition": "HEALTHY" },
       { "containerName": "minio", "condition": "START" }
     ],
     "logConfiguration": ${log_configuration}

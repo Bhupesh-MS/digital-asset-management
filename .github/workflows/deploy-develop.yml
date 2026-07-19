@@ -61,6 +61,29 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Validate deployment inputs
+        run: |
+          if [ -z "$TF_VAR_database_password" ]; then
+            echo "DATABASE_PASSWORD secret must be set."
+            exit 1
+          fi
+          if [ -z "$TF_VAR_rabbitmq_password" ]; then
+            echo "RABBITMQ_PASSWORD secret must be set."
+            exit 1
+          fi
+          if [ ${#TF_VAR_minio_access_key} -lt 3 ]; then
+            echo "MINIO_ACCESS_KEY secret must be at least 3 characters."
+            exit 1
+          fi
+          if [ ${#TF_VAR_minio_secret_key} -lt 8 ]; then
+            echo "MINIO_SECRET_KEY secret must be at least 8 characters."
+            exit 1
+          fi
+          if [ ${#TF_VAR_jwt_secret} -lt 32 ]; then
+            echo "JWT_SECRET secret must be at least 32 characters."
+            exit 1
+          fi
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
