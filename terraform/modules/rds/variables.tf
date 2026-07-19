@@ -42,9 +42,9 @@ variable "allocated_storage" {
 }
 
 variable "engine_version" {
-  description = "PostgreSQL engine version."
+  description = "PostgreSQL engine version. Use a major version so RDS selects an available minor version in the target region."
   type        = string
-  default     = "16.8"
+  default     = "16"
 }
 
 variable "skip_final_snapshot" {
