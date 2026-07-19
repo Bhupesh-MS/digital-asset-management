@@ -92,9 +92,7 @@ Internal connection targets inside the ECS task:
 
 RDS PostgreSQL will be reached using its RDS endpoint.
 
-The ECS task should be assigned a public IP because no load balancer is included in this plan.
-
-Public access will be through the ECS task public IP and exposed container ports.
+Public access will be through an internet-facing Application Load Balancer in front of the ECS service. Use the ALB DNS name for browser-facing endpoints instead of the ECS task public IP.
 
 ## 5. High-Level Deployment Flow
 
@@ -330,6 +328,8 @@ The web image must be built with:
 
 Because the web app is built at image build time, GitHub Actions must pass VITE_API_BASE_URL as a Docker build argument while building the web image.
 
+For AWS deployments, VITE_API_BASE_URL should use the ALB DNS name and API listener port, for example http://ALB_DNS_NAME:3000. API_BASE_URL should use the same value, CORS_ORIGIN should use http://ALB_DNS_NAME, and MINIO_PUBLIC_ENDPOINT should use ALB_DNS_NAME with MINIO_PUBLIC_PORT set to 9000.
+
 For the ECS multi-container task model, internal service URLs should use localhost for redis, rabbitmq, and minio.
 
 RDS must use the RDS endpoint.
@@ -419,13 +419,17 @@ Terraform should output:
 - ECS cluster name
 - ECS service name
 - ECS task security group ID
+- ALB DNS name
+- Web URL
+- API URL
+- MinIO URL
 - RDS endpoint
 - ECR web repository URL
 - ECR api repository URL
 - ECR worker repository URL
 - ECS service information
 
-If public task access is used, a separate command or deployment note is needed to find the current ECS task public IP after deployment.
+The ECS task public IP is not used for browser-facing configuration. Use Terraform's ALB outputs instead.
 
 ## 19. GitHub Repository Secrets
 
@@ -501,7 +505,7 @@ The first deployment should follow this order:
 12. Terraform creates ECS service.
 13. ECS starts the Fargate task.
 14. The ECS task starts all containers.
-15. The web and api containers become reachable through the ECS task public IP and allowed ports.
+15. The web, api, and MinIO API containers become reachable through the ALB DNS name and listener ports.
 
 ## 23. Database Migration Step
 
@@ -607,7 +611,7 @@ Terraform ECS:
 - [ ] Add environment variables.
 - [ ] Add container dependencies.
 - [ ] Create ECS service.
-- [ ] Configure public IP assignment for the ECS service.
+- [ ] Add ALB, listeners, target groups, and ECS service load balancer attachments.
 
 GitHub Actions:
 
@@ -659,4 +663,3 @@ After implementation, pushing code to the develop branch should automatically:
 8. Run the DAM platform containers on AWS.
 9. Use RDS PostgreSQL as the database.
 10. Use EFS to persist Redis, RabbitMQ, and MinIO data.
-

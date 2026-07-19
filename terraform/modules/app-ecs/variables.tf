@@ -18,6 +18,24 @@ variable "security_group_ids" {
   type        = list(string)
 }
 
+variable "web_target_group_arn" {
+  description = "Optional ALB target group ARN for the web container."
+  type        = string
+  default     = null
+}
+
+variable "api_target_group_arn" {
+  description = "Optional ALB target group ARN for the API container."
+  type        = string
+  default     = null
+}
+
+variable "minio_target_group_arn" {
+  description = "Optional ALB target group ARN for the MinIO container."
+  type        = string
+  default     = null
+}
+
 variable "assign_public_ip" {
   description = "Whether the ECS task gets a public IP."
   type        = bool

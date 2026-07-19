@@ -138,6 +138,18 @@ _Note: If tests are cached by Turbo, you can force a full run with `pnpm test --
 
 ---
 
+## Deployment
+
+AWS deployment uses Terraform and GitHub Actions. The `develop` environment creates an Application Load Balancer in front of ECS, so GitHub variables should use the stable ALB DNS name instead of a changing ECS task public IP.
+
+Public AWS endpoints:
+
+- **Web App**: `http://ALB_DNS_NAME`
+- **REST API**: `http://ALB_DNS_NAME:3000`
+- **MinIO API**: `http://ALB_DNS_NAME:9000`
+
+See [terraform/README.md](terraform/README.md) for the required GitHub Secrets/Variables and first-deployment steps.
+
 ## Deployment (Docker Swarm)
 
 Production deployments use Docker Swarm.

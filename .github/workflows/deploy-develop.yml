@@ -153,6 +153,13 @@ jobs:
           TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
         run: terraform apply -auto-approve
 
+      - name: Show load balancer URLs
+        working-directory: terraform/environments/develop
+        run: |
+          echo "Web URL: $(terraform output -raw web_url)"
+          echo "API URL: $(terraform output -raw api_url)"
+          echo "MinIO URL: $(terraform output -raw minio_url)"
+
       - name: Run database migrations
         working-directory: terraform/environments/develop
         run: |

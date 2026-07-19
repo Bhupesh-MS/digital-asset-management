@@ -55,7 +55,44 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_security_group" "ecs_task" {
   name        = "${local.name_prefix}-ecs-task"
-  description = "Public access for DAM web and API containers"
+  description = "Container access from the application load balancer"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = "Web from ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "API from ALB"
+    from_port       = 3000
+    to_port         = 3000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "MinIO API from ALB"
+    from_port       = 9000
+    to_port         = 9000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "alb" {
+  name        = "${local.name_prefix}-alb"
+  description = "Public access to the DAM application load balancer"
   vpc_id      = aws_vpc.this.id
 
   ingress {
@@ -70,6 +107,14 @@ resource "aws_security_group" "ecs_task" {
     description = "API"
     from_port   = 3000
     to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_public_cidr_blocks
+  }
+
+  ingress {
+    description = "MinIO API"
+    from_port   = 9000
+    to_port     = 9000
     protocol    = "tcp"
     cidr_blocks = var.allowed_public_cidr_blocks
   }
@@ -142,6 +187,104 @@ resource "aws_efs_mount_target" "public" {
   security_groups = [aws_security_group.efs.id]
 }
 
+resource "aws_lb" "app" {
+  name               = local.alb_name
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = values(aws_subnet.public)[*].id
+}
+
+resource "aws_lb_target_group" "web" {
+  name        = "${local.tg_prefix}-web"
+  port        = 80
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.this.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200-399"
+    path                = "/"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_target_group" "api" {
+  name        = "${local.tg_prefix}-api"
+  port        = 3000
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.this.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200-399"
+    path                = "/health"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_target_group" "minio" {
+  name        = "${local.tg_prefix}-minio"
+  port        = 9000
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.this.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200-399"
+    path                = "/minio/health/live"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_listener" "web" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.web.arn
+  }
+}
+
+resource "aws_lb_listener" "api" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 3000
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+resource "aws_lb_listener" "minio" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 9000
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.minio.arn
+  }
+}
+
 module "ecr" {
   source = "../../modules/ecr"
 
@@ -198,6 +341,9 @@ module "app_ecs" {
   cluster_id                     = module.ecs_cluster.id
   subnet_ids                     = values(aws_subnet.public)[*].id
   security_group_ids             = [aws_security_group.ecs_task.id]
+  web_target_group_arn           = aws_lb_target_group.web.arn
+  api_target_group_arn           = aws_lb_target_group.api.arn
+  minio_target_group_arn         = aws_lb_target_group.minio.arn
   task_cpu                       = var.task_cpu
   task_memory                    = var.task_memory
   desired_count                  = var.desired_count
@@ -234,5 +380,10 @@ module "app_ecs" {
   rabbitmq_username              = var.rabbitmq_username
   rabbitmq_password              = var.rabbitmq_password
 
-  depends_on = [aws_efs_mount_target.public]
+  depends_on = [
+    aws_efs_mount_target.public,
+    aws_lb_listener.web,
+    aws_lb_listener.api,
+    aws_lb_listener.minio
+  ]
 }

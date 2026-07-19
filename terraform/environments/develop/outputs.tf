@@ -28,6 +28,31 @@ output "ecs_task_security_group_id" {
   value       = aws_security_group.ecs_task.id
 }
 
+output "alb_security_group_id" {
+  description = "Application load balancer security group ID."
+  value       = aws_security_group.alb.id
+}
+
+output "alb_dns_name" {
+  description = "Stable browser-facing DNS name of the application load balancer."
+  value       = aws_lb.app.dns_name
+}
+
+output "web_url" {
+  description = "Browser-facing web URL served by the application load balancer."
+  value       = "http://${aws_lb.app.dns_name}"
+}
+
+output "api_url" {
+  description = "Browser-facing API URL served by the application load balancer."
+  value       = "http://${aws_lb.app.dns_name}:3000"
+}
+
+output "minio_url" {
+  description = "Browser-facing MinIO API URL served by the application load balancer."
+  value       = "http://${aws_lb.app.dns_name}:9000"
+}
+
 output "rds_endpoint" {
   description = "RDS endpoint including port."
   value       = module.rds.endpoint
@@ -46,9 +71,4 @@ output "ecr_api_repository_url" {
 output "ecr_worker_repository_url" {
   description = "Worker ECR repository URL."
   value       = module.ecr.repository_urls["worker"]
-}
-
-output "ecs_public_ip_lookup_command" {
-  description = "Command to find the currently running ECS task public IP."
-  value       = "aws ecs list-tasks --cluster ${module.ecs_cluster.name} --service-name ${module.app_ecs.service_name} --query 'taskArns[0]' --output text"
 }

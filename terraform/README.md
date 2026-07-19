@@ -35,10 +35,10 @@ Add these repository or environment variables for `develop`:
 - `DATABASE_USERNAME` with `dam`
 - `RABBITMQ_USERNAME` with `dam`
 - `MINIO_BUCKET` with `assets`
-- `MINIO_PUBLIC_ENDPOINT` with your public MinIO host, public ECS task IP, or later a domain
+- `MINIO_PUBLIC_ENDPOINT` with the load balancer DNS name from `terraform output -raw alb_dns_name`
 - `MINIO_PUBLIC_PORT` with `9000`
-- `CORS_ORIGIN` with the browser origin allowed to call the API
-- `VITE_API_BASE_URL` with the browser-facing API URL, for example `http://PUBLIC_TASK_IP:3000`
+- `CORS_ORIGIN` with the browser origin allowed to call the API, for example `http://ALB_DNS_NAME`
+- `VITE_API_BASE_URL` with the browser-facing API URL, for example `http://ALB_DNS_NAME:3000`
 - `API_BASE_URL` with the same browser-facing API URL, used by API docs metadata
 
 Optional variables are supported and default to the local `.env.sample` values when omitted:
@@ -67,6 +67,34 @@ Do not add `DATABASE_URL` as a GitHub secret or variable for this Terraform depl
 Do not add `REDIS_URL` either. Redis runs as a container in the same ECS task, so Terraform sets it internally to `redis://localhost:6379`.
 
 RabbitMQ and MinIO also run inside the same ECS task. Terraform sets the internal URLs/endpoints to localhost and uses only the username/password/access-key values from GitHub Secrets or Variables.
+
+## Load Balancer Endpoint
+
+The `develop` environment creates an internet-facing Application Load Balancer in front of the ECS service. Use the ALB DNS name instead of the ECS task public IP; the DNS name stays stable across task restarts and deployments.
+
+Terraform outputs the public endpoints after apply:
+
+```bash
+terraform -chdir=terraform/environments/develop output -raw web_url
+terraform -chdir=terraform/environments/develop output -raw api_url
+terraform -chdir=terraform/environments/develop output -raw minio_url
+```
+
+The listeners are:
+
+- Web: `http://ALB_DNS_NAME`
+- API: `http://ALB_DNS_NAME:3000`
+- MinIO API: `http://ALB_DNS_NAME:9000`
+
+After the first deployment that creates the ALB, update GitHub variables to use the ALB DNS name:
+
+- `VITE_API_BASE_URL`: `http://ALB_DNS_NAME:3000`
+- `API_BASE_URL`: `http://ALB_DNS_NAME:3000`
+- `CORS_ORIGIN`: `http://ALB_DNS_NAME`
+- `MINIO_PUBLIC_ENDPOINT`: `ALB_DNS_NAME`
+- `MINIO_PUBLIC_PORT`: `9000`
+
+Run the deploy workflow once more after updating those variables so the web image is rebuilt with the stable API URL. The ECS tasks may still receive public IPs for outbound internet access from the public subnets, but public inbound traffic is through the ALB security group.
 
 ## Local Commands
 
