@@ -18,5 +18,7 @@ COPY --from=build /app/package.json /app/pnpm-lock.yaml* /app/pnpm-workspace.yam
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api ./apps/api
 COPY --from=build /app/packages ./packages
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 EXPOSE 3000
 CMD ["pnpm", "--filter", "@dam/api", "start"]

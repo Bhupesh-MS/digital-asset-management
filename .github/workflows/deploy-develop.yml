@@ -1,0 +1,152 @@
+name: Deploy Develop
+
+on:
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: deploy-develop
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_IN_AUTOMATION: true
+  TF_INPUT: false
+  TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+  TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'dam-platform' }}
+  TF_VAR_environment: develop
+  TF_VAR_database_name: ${{ vars.DATABASE_NAME || 'dam' }}
+  TF_VAR_database_schema: ${{ vars.DATABASE_SCHEMA || 'public' }}
+  TF_VAR_database_username: ${{ vars.DATABASE_USERNAME || 'dam' }}
+  TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+  TF_VAR_rabbitmq_username: ${{ vars.RABBITMQ_USERNAME || 'dam' }}
+  TF_VAR_rabbitmq_password: ${{ secrets.RABBITMQ_PASSWORD }}
+  TF_VAR_minio_access_key: ${{ secrets.MINIO_ACCESS_KEY }}
+  TF_VAR_minio_secret_key: ${{ secrets.MINIO_SECRET_KEY }}
+  TF_VAR_minio_bucket: ${{ vars.MINIO_BUCKET || 'assets' }}
+  TF_VAR_minio_public_endpoint: ${{ vars.MINIO_PUBLIC_ENDPOINT || 'localhost' }}
+  TF_VAR_minio_public_port: ${{ vars.MINIO_PUBLIC_PORT || '9000' }}
+  TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+  TF_VAR_cors_origin: ${{ vars.CORS_ORIGIN }}
+  TF_VAR_api_base_url: ${{ vars.API_BASE_URL || vars.VITE_API_BASE_URL }}
+  TF_VAR_vite_api_base_url: ${{ vars.VITE_API_BASE_URL }}
+  TF_VAR_database_connect_attempts: ${{ vars.DATABASE_CONNECT_ATTEMPTS || '10' }}
+  TF_VAR_database_connect_delay_ms: ${{ vars.DATABASE_CONNECT_DELAY_MS || '2000' }}
+  TF_VAR_max_json_payload_size: ${{ vars.MAX_JSON_PAYLOAD_SIZE || '10mb' }}
+  TF_VAR_log_level: ${{ vars.LOG_LEVEL || 'info' }}
+  TF_VAR_minio_use_ssl: ${{ vars.MINIO_USE_SSL || 'false' }}
+  TF_VAR_minio_region: ${{ vars.MINIO_REGION || 'ap-south-1' }}
+  TF_VAR_max_asset_files: ${{ vars.MAX_ASSET_FILES || '10' }}
+  TF_VAR_max_asset_file_size_bytes: ${{ vars.MAX_ASSET_FILE_SIZE_BYTES || '524288000' }}
+  TF_VAR_upload_stream_chunk_size_bytes: ${{ vars.UPLOAD_STREAM_CHUNK_SIZE_BYTES || '8388608' }}
+  TF_VAR_upload_temp_dir: ${{ vars.UPLOAD_TEMP_DIR || '/tmp/dam-platform/uploads' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: develop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform init
+        working-directory: terraform/environments/develop
+        run: terraform init -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: Terraform validate
+        working-directory: terraform/environments/develop
+        run: terraform validate
+
+      - name: Ensure ECR repositories exist
+        working-directory: terraform/environments/develop
+        run: terraform apply -auto-approve -target=module.ecr
+
+      - name: Read ECR repository URLs
+        id: ecr
+        working-directory: terraform/environments/develop
+        run: |
+          echo "web_repo=$(terraform output -raw ecr_web_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "api_repo=$(terraform output -raw ecr_api_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "worker_repo=$(terraform output -raw ecr_worker_repository_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push web image
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL="${{ vars.VITE_API_BASE_URL }}" \
+            -f infrastructure/docker/web.Dockerfile \
+            -t "${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}" \
+            .
+          docker push "${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}"
+
+      - name: Build and push api image
+        run: |
+          docker build \
+            -f infrastructure/docker/api.Dockerfile \
+            -t "${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}" \
+            .
+          docker push "${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}"
+
+      - name: Build and push worker image
+        run: |
+          docker build \
+            -f infrastructure/docker/worker.Dockerfile \
+            -t "${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}" \
+            .
+          docker push "${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}"
+
+      - name: Terraform plan
+        working-directory: terraform/environments/develop
+        env:
+          TF_VAR_web_image: ${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}
+          TF_VAR_api_image: ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}
+          TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
+        run: terraform plan
+
+      - name: Terraform apply
+        working-directory: terraform/environments/develop
+        env:
+          TF_VAR_web_image: ${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}
+          TF_VAR_api_image: ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}
+          TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
+        run: terraform apply -auto-approve
+
+      - name: Run database migrations
+        working-directory: terraform/environments/develop
+        run: |
+          CLUSTER_NAME="$(terraform output -raw ecs_cluster_name)"
+          TASK_DEFINITION="$(terraform output -raw migration_task_definition_arn)"
+          SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
+          SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
+          TASK_ARN="$(aws ecs run-task \
+            --cluster "$CLUSTER_NAME" \
+            --task-definition "$TASK_DEFINITION" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
+          EXIT_CODE="$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN" --query 'tasks[0].containers[?name==`migrate`].exitCode | [0]' --output text)"
+          if [ "$EXIT_CODE" != "0" ]; then
+            aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
+            exit 1
+          fi

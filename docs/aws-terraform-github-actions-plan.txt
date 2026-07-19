@@ -1,0 +1,662 @@
+# Deploying The DAM Platform To AWS Using ECS Fargate, Terraform, And GitHub Actions
+
+This document is the implementation plan for deploying the DAM platform to AWS using ECS Fargate, Terraform, and GitHub Actions.
+
+The current project is Dockerized and runs locally using Docker Compose. The target is to deploy the same application architecture to AWS, while using Terraform to manage infrastructure and GitHub Actions to trigger deployments whenever code is pushed to the develop branch.
+
+This plan is intentionally scoped to the requested architecture only.
+
+## 1. Current Local Architecture
+
+The local Docker Compose setup contains these services:
+
+- web
+- api
+- worker
+- postgres
+- redis
+- rabbitmq
+- minio
+
+In local development, all services run as Docker containers.
+
+The current Docker Compose file is located at:
+
+infrastructure/docker/docker-compose.yml
+
+The current Dockerfiles are located at:
+
+infrastructure/docker/web.Dockerfile
+infrastructure/docker/api.Dockerfile
+infrastructure/docker/worker.Dockerfile
+
+The current image build helper is located at:
+
+infrastructure/scripts/build-images.sh
+
+## 2. Target AWS Architecture
+
+The target AWS architecture is:
+
+- ECS Fargate for application and supporting containers
+- RDS PostgreSQL for the database
+- ECR for Docker image storage
+- EFS for persistent container data
+- S3 for Terraform remote state
+- GitHub Actions for CI/CD
+- Terraform for infrastructure provisioning
+
+PostgreSQL will not run as a container in ECS. It will be moved to RDS.
+
+Redis, RabbitMQ, and MinIO will continue to run as containers in ECS Fargate.
+
+## 3. AWS Service Mapping
+
+| Current Service | AWS Service | Purpose |
+|---|---|---|
+| web | ECS Fargate | Runs the frontend container |
+| api | ECS Fargate | Runs the backend API container |
+| worker | ECS Fargate | Runs background processing jobs |
+| postgres | Amazon RDS | Managed PostgreSQL database |
+| redis | ECS Fargate + EFS | Redis container with persistent storage |
+| rabbitmq | ECS Fargate + EFS | RabbitMQ container with persistent storage |
+| minio | ECS Fargate + EFS | S3-compatible object storage container |
+| Docker images | Amazon ECR | Stores built container images |
+| Terraform state | Amazon S3 | Stores Terraform remote state |
+
+## 4. Deployment Model
+
+Use one ECS Fargate service for the DAM platform.
+
+That ECS service will run one task definition containing multiple containers:
+
+- web
+- api
+- worker
+- redis
+- rabbitmq
+- minio
+
+PostgreSQL will be outside the task and provided by RDS.
+
+This model keeps the deployment close to the current Docker Compose structure. Containers inside the same ECS task can communicate using localhost because they share the same task network namespace.
+
+Internal connection targets inside the ECS task:
+
+- api to redis: localhost:6379
+- api to rabbitmq: localhost:5672
+- api to minio: localhost:9000
+- worker to redis: localhost:6379
+- worker to rabbitmq: localhost:5672
+- worker to minio: localhost:9000
+
+RDS PostgreSQL will be reached using its RDS endpoint.
+
+The ECS task should be assigned a public IP because no load balancer is included in this plan.
+
+Public access will be through the ECS task public IP and exposed container ports.
+
+## 5. High-Level Deployment Flow
+
+The deployment flow is:
+
+1. Code is pushed to the develop branch.
+2. GitHub Actions workflow starts.
+3. GitHub Actions builds Docker images.
+4. Images are pushed to Amazon ECR.
+5. Terraform is initialized using S3 remote state.
+6. Terraform creates or updates AWS infrastructure.
+7. Terraform registers the ECS task definition using the latest image tags.
+8. ECS Fargate deploys the latest containers.
+
+Flow diagram:
+
+GitHub develop branch
+  |
+  v
+GitHub Actions
+  |
+  | Build Docker images
+  | Push images to ECR
+  | Run Terraform
+  v
+AWS ECS Fargate
+  |
+  | Runs DAM containers
+  v
+DAM Platform
+
+## 6. Required AWS Resources
+
+Terraform must create the following AWS resources:
+
+Networking:
+
+- VPC
+- Public subnets
+- Internet gateway
+- Public route table
+- Route table associations
+- Security groups
+
+Container registry:
+
+- ECR repository for web
+- ECR repository for api
+- ECR repository for worker
+
+Compute:
+
+- ECS cluster
+- ECS task execution IAM role
+- ECS task IAM role
+- ECS task definition
+- ECS service
+
+Database:
+
+- RDS subnet group
+- RDS PostgreSQL instance
+- RDS security group
+
+Persistent storage:
+
+- EFS file system
+- EFS mount targets
+- EFS access points for redis, rabbitmq, and minio
+- EFS security group
+
+Terraform state:
+
+- S3 backend configuration
+
+## 7. Terraform State Management
+
+Terraform state must be stored in an S3 bucket.
+
+The S3 bucket for Terraform state must exist before the main Terraform stack is initialized.
+
+Create the S3 state bucket as a one-time bootstrap step.
+
+The main Terraform backend should use:
+
+- S3 bucket name
+- state key for the develop environment
+- AWS region
+- encryption enabled
+
+DynamoDB locking is not part of this plan.
+
+Because state locking is not used, GitHub Actions must prevent concurrent deployments for the develop branch.
+
+## 8. GitHub Actions Concurrency
+
+The GitHub Actions workflow must use concurrency for the develop deployment.
+
+The workflow should allow only one deployment at a time for the develop environment.
+
+Concurrency behavior:
+
+- If a deployment is already running, another deployment must wait.
+- A running Terraform apply must not be interrupted by another workflow run.
+
+## 9. Docker Images
+
+GitHub Actions must build these project images:
+
+- web
+- api
+- worker
+
+The images must be pushed to ECR.
+
+Use unique image tags based on the Git commit SHA.
+
+Required ECR image variables passed into Terraform:
+
+- web_image
+- api_image
+- worker_image
+
+Redis, RabbitMQ, and MinIO images can use the image names currently used by Docker Compose:
+
+- redis:7-alpine
+- rabbitmq:3-management-alpine
+- minio/minio:RELEASE.2024-12-18T13-15-44Z
+
+## 10. ECS Task Definition
+
+The ECS task definition must include these containers:
+
+- web
+- api
+- worker
+- redis
+- rabbitmq
+- minio
+
+The task must use Fargate.
+
+The task network mode must be awsvpc.
+
+The task must define CPU and memory values that are enough for all containers in the task.
+
+The task must expose the required container ports:
+
+- web: 80
+- api: 3000
+- redis: 6379
+- rabbitmq: 5672
+- rabbitmq management: 15672
+- minio: 9000
+- minio console: 9001
+
+The ECS service security group controls which of these ports are reachable from outside.
+
+## 11. ECS Container Dependencies
+
+The ECS task definition should configure container startup order.
+
+Container dependency order:
+
+1. redis starts
+2. rabbitmq starts
+3. minio starts
+4. api starts after redis, rabbitmq, and minio
+5. worker starts after rabbitmq and minio
+6. web starts after api
+
+This should be configured using ECS container dependencies where practical.
+
+## 12. EFS Mounts
+
+EFS must be mounted into the stateful containers.
+
+Mounts:
+
+- redis container: /data
+- rabbitmq container: /var/lib/rabbitmq
+- minio container: /data
+
+Use separate EFS access points for:
+
+- redis
+- rabbitmq
+- minio
+
+The ECS task definition must define EFS volumes and mount points for these containers.
+
+## 13. RDS PostgreSQL
+
+Terraform must create an RDS PostgreSQL instance.
+
+RDS must be reachable by the ECS task security group.
+
+The database should use:
+
+- database name for the DAM platform
+- database username
+- database password
+- PostgreSQL engine
+- private connectivity from ECS
+
+The application DATABASE_URL must point to the RDS endpoint.
+
+PostgreSQL must be removed from the ECS container list because RDS replaces it.
+
+## 14. Runtime Environment Variables
+
+The ECS task definition must provide environment variables for the api and worker containers.
+
+The required runtime configuration includes:
+
+- NODE_ENV
+- DATABASE_URL
+- RABBITMQ_URL
+- REDIS_URL
+- MINIO_ENDPOINT
+- MINIO_PUBLIC_ENDPOINT
+- MINIO_PORT
+- MINIO_BUCKET
+- MINIO_ACCESS_KEY
+- MINIO_SECRET_KEY
+- JWT_SECRET
+- CORS_ORIGIN
+- upload-related configuration
+
+The web image must be built with:
+
+- VITE_API_BASE_URL
+
+Because the web app is built at image build time, GitHub Actions must pass VITE_API_BASE_URL as a Docker build argument while building the web image.
+
+For the ECS multi-container task model, internal service URLs should use localhost for redis, rabbitmq, and minio.
+
+RDS must use the RDS endpoint.
+
+## 15. Security Groups
+
+Terraform must create security groups for:
+
+- ECS task
+- RDS
+- EFS
+
+ECS task security group:
+
+- Allow inbound web traffic to the web container port.
+- Allow inbound API traffic to the api container port.
+- Allow outbound traffic needed by the task.
+
+RDS security group:
+
+- Allow inbound PostgreSQL traffic only from the ECS task security group.
+
+EFS security group:
+
+- Allow inbound NFS traffic only from the ECS task security group.
+
+Public inbound access to Redis, RabbitMQ, MinIO, and RDS should not be allowed.
+
+## 16. Terraform Folder Structure
+
+Create Terraform files under:
+
+infrastructure/terraform/
+
+Suggested structure:
+
+infrastructure/terraform/
+  backend.tf
+  providers.tf
+  variables.tf
+  outputs.tf
+  versions.tf
+  network.tf
+  security-groups.tf
+  ecr.tf
+  ecs.tf
+  rds.tf
+  efs.tf
+  terraform.tfvars.example
+
+The initial implementation can use separate Terraform files in one root module.
+
+## 17. Terraform Variables
+
+Terraform should define variables for:
+
+- AWS region
+- project name
+- environment name
+- VPC CIDR
+- public subnet CIDRs
+- ECS task CPU
+- ECS task memory
+- web image
+- api image
+- worker image
+- database name
+- database username
+- database password
+- RabbitMQ username
+- RabbitMQ password
+- MinIO access key
+- MinIO secret key
+- MinIO bucket
+- JWT secret
+- CORS origin
+- VITE API base URL
+
+Values that change between environments should be variables.
+
+Sensitive values should be marked sensitive in Terraform variables.
+
+## 18. Terraform Outputs
+
+Terraform should output:
+
+- ECS cluster name
+- ECS service name
+- ECS task security group ID
+- RDS endpoint
+- ECR web repository URL
+- ECR api repository URL
+- ECR worker repository URL
+- ECS service information
+
+If public task access is used, a separate command or deployment note is needed to find the current ECS task public IP after deployment.
+
+## 19. GitHub Repository Secrets
+
+The GitHub repository must contain secrets required by the deployment workflow.
+
+Required GitHub secrets:
+
+- AWS access configuration
+- AWS region
+- Terraform variable values that are sensitive
+- application secrets used during ECS task definition creation
+
+The workflow must not hardcode sensitive values.
+
+## 20. GitHub Actions Workflow
+
+Create the workflow file under:
+
+.github/workflows/deploy-develop.yml
+
+The workflow trigger:
+
+- push to develop branch
+
+Workflow stages:
+
+1. Checkout repository.
+2. Configure AWS credentials.
+3. Login to ECR.
+4. Build web image.
+5. Build api image.
+6. Build worker image.
+7. Push web image to ECR.
+8. Push api image to ECR.
+9. Push worker image to ECR.
+10. Set image URI outputs or environment variables.
+11. Setup Terraform.
+12. Run terraform init.
+13. Run terraform validate.
+14. Run terraform plan.
+15. Run terraform apply.
+
+Terraform apply must receive the latest ECR image URIs as variables.
+
+## 21. Required Manual Setup Before First Deployment
+
+Before the first GitHub Actions deployment, complete these manual setup steps:
+
+1. Create or choose the AWS account.
+2. Choose the AWS region.
+3. Create the S3 bucket for Terraform state.
+4. Configure the Terraform backend to point to the S3 bucket.
+5. Create AWS credentials or role access for GitHub Actions.
+6. Add required GitHub repository secrets.
+7. Create the develop branch if it does not already exist.
+8. Push the Terraform and workflow files to the repository.
+
+## 22. First Deployment Sequence
+
+The first deployment should follow this order:
+
+1. Add Terraform files under infrastructure/terraform.
+2. Add GitHub Actions workflow under .github/workflows.
+3. Commit changes.
+4. Push to develop branch.
+5. GitHub Actions builds images and pushes them to ECR.
+6. GitHub Actions runs terraform init.
+7. GitHub Actions runs terraform validate.
+8. GitHub Actions runs terraform plan.
+9. GitHub Actions runs terraform apply.
+10. Terraform creates AWS resources.
+11. Terraform creates ECS task definition.
+12. Terraform creates ECS service.
+13. ECS starts the Fargate task.
+14. The ECS task starts all containers.
+15. The web and api containers become reachable through the ECS task public IP and allowed ports.
+
+## 23. Database Migration Step
+
+After RDS is created and before using the application, Prisma migrations must be applied to the RDS database.
+
+This can be done as a deployment step after Terraform creates or updates RDS.
+
+The migration command must run with DATABASE_URL pointing to the RDS PostgreSQL database.
+
+The deployment implementation must decide where this migration runs:
+
+- from GitHub Actions using network access to the database, or
+- from an ECS one-off task that has access to RDS.
+
+For this architecture, the migration step is required because the application depends on the Prisma schema being applied to PostgreSQL.
+
+## 24. Verification Steps After Deployment
+
+After deployment, verify:
+
+1. GitHub Actions completed successfully.
+2. ECR contains the latest web image.
+3. ECR contains the latest api image.
+4. ECR contains the latest worker image.
+5. Terraform state exists in the S3 backend bucket.
+6. ECS cluster exists.
+7. ECS service is running.
+8. ECS task is running.
+9. RDS instance is available.
+10. EFS file system is available.
+11. EFS mount targets are available.
+12. The web container is reachable on its configured public port.
+13. The api container is reachable on its configured public port.
+14. The api can connect to RDS.
+15. The api can connect to RabbitMQ.
+16. The api can connect to Redis.
+17. The api can connect to MinIO.
+18. The worker can connect to RabbitMQ.
+19. The worker can connect to MinIO.
+20. Asset upload and processing flow works end to end.
+
+## 25. Implementation Checklist
+
+Use this checklist during implementation.
+
+Terraform backend:
+
+- [ ] Create S3 bucket for Terraform state.
+- [ ] Add backend.tf.
+- [ ] Configure S3 backend key for develop.
+
+Terraform networking:
+
+- [ ] Create VPC.
+- [ ] Create public subnets.
+- [ ] Create internet gateway.
+- [ ] Create route table.
+- [ ] Associate public subnets with route table.
+
+Terraform security:
+
+- [ ] Create ECS task security group.
+- [ ] Create RDS security group.
+- [ ] Create EFS security group.
+- [ ] Allow ECS to RDS.
+- [ ] Allow ECS to EFS.
+- [ ] Allow public inbound only for web/api ports.
+
+Terraform ECR:
+
+- [ ] Create web ECR repository.
+- [ ] Create api ECR repository.
+- [ ] Create worker ECR repository.
+
+Terraform RDS:
+
+- [ ] Create RDS subnet group.
+- [ ] Create PostgreSQL RDS instance.
+- [ ] Configure database name, username, and password.
+- [ ] Output RDS endpoint.
+
+Terraform EFS:
+
+- [ ] Create EFS file system.
+- [ ] Create EFS mount targets.
+- [ ] Create Redis access point.
+- [ ] Create RabbitMQ access point.
+- [ ] Create MinIO access point.
+
+Terraform ECS:
+
+- [ ] Create ECS cluster.
+- [ ] Create ECS task execution role.
+- [ ] Create ECS task role.
+- [ ] Create ECS task definition.
+- [ ] Add web container.
+- [ ] Add api container.
+- [ ] Add worker container.
+- [ ] Add redis container.
+- [ ] Add rabbitmq container.
+- [ ] Add minio container.
+- [ ] Add EFS volumes and mount points.
+- [ ] Add environment variables.
+- [ ] Add container dependencies.
+- [ ] Create ECS service.
+- [ ] Configure public IP assignment for the ECS service.
+
+GitHub Actions:
+
+- [ ] Create deploy-develop workflow.
+- [ ] Trigger workflow on push to develop.
+- [ ] Add concurrency group.
+- [ ] Configure AWS credentials.
+- [ ] Login to ECR.
+- [ ] Build web image with VITE_API_BASE_URL build arg.
+- [ ] Build api image.
+- [ ] Build worker image.
+- [ ] Push images to ECR.
+- [ ] Pass image URIs to Terraform.
+- [ ] Run terraform init.
+- [ ] Run terraform validate.
+- [ ] Run terraform plan.
+- [ ] Run terraform apply.
+- [ ] Run database migration step.
+
+Repository configuration:
+
+- [ ] Add required GitHub secrets.
+- [ ] Confirm develop branch exists.
+- [ ] Confirm Dockerfiles build successfully.
+- [ ] Confirm Terraform files are committed.
+- [ ] Confirm workflow file is committed.
+
+Deployment verification:
+
+- [ ] Confirm GitHub Actions run succeeded.
+- [ ] Confirm ECS task is running.
+- [ ] Confirm RDS is available.
+- [ ] Confirm EFS is mounted by stateful containers.
+- [ ] Confirm web is reachable.
+- [ ] Confirm api is reachable.
+- [ ] Confirm upload and processing works.
+
+## 26. Final Target Result
+
+After implementation, pushing code to the develop branch should automatically:
+
+1. Build web, api, and worker Docker images.
+2. Push those images to Amazon ECR.
+3. Initialize Terraform using S3 remote state.
+4. Apply Terraform changes.
+5. Create or update AWS infrastructure.
+6. Register a new ECS task definition.
+7. Deploy the ECS Fargate service.
+8. Run the DAM platform containers on AWS.
+9. Use RDS PostgreSQL as the database.
+10. Use EFS to persist Redis, RabbitMQ, and MinIO data.
+
