@@ -91,6 +91,17 @@ variable "database_password" {
   description = "RDS master password."
   type        = string
   sensitive   = true
+
+  validation {
+    condition = (
+      can(regex("^[!-~]{8,128}$", var.database_password)) &&
+      !strcontains(var.database_password, "/") &&
+      !strcontains(var.database_password, "@") &&
+      !strcontains(var.database_password, "\"") &&
+      !strcontains(var.database_password, " ")
+    )
+    error_message = "DATABASE_PASSWORD must be 8-128 printable ASCII characters and cannot contain '/', '@', double quotes, or spaces."
+  }
 }
 
 variable "rds_instance_class" {

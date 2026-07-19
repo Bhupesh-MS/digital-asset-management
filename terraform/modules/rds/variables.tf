@@ -27,6 +27,17 @@ variable "database_password" {
   description = "Database master password."
   type        = string
   sensitive   = true
+
+  validation {
+    condition = (
+      can(regex("^[!-~]{8,128}$", var.database_password)) &&
+      !strcontains(var.database_password, "/") &&
+      !strcontains(var.database_password, "@") &&
+      !strcontains(var.database_password, "\"") &&
+      !strcontains(var.database_password, " ")
+    )
+    error_message = "Database password must be 8-128 printable ASCII characters and cannot contain '/', '@', double quotes, or spaces."
+  }
 }
 
 variable "instance_class" {
