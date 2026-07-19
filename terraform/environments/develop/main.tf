@@ -55,7 +55,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_security_group" "ecs_task" {
   name        = "${local.name_prefix}-ecs-task"
-  description = "Container access from the application load balancer"
+  description = "Public access for DAM web and API containers"
   vpc_id      = aws_vpc.this.id
 
   ingress {
