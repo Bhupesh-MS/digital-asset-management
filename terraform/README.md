@@ -17,7 +17,7 @@ Add these repository or environment secrets for `develop`:
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
-- `DATABASE_PASSWORD` (Make sure to follow password policy to avoid failure)
+- `DATABASE_PASSWORD` using 8-128 printable ASCII characters, excluding `/`, `@`, double quotes, and spaces. Example safe character set: letters, numbers, `_`, `-`, `.`, `#`, `%`, `+`, `=`.
 - `RABBITMQ_PASSWORD`
 - `MINIO_ACCESS_KEY`
 - `MINIO_SECRET_KEY`
