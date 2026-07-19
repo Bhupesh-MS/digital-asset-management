@@ -5,3 +5,12 @@ dist
 coverage
 *.log
 .env
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
