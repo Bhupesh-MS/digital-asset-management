@@ -34,7 +34,7 @@
       "command": ["CMD-SHELL", "rabbitmq-diagnostics -q ping"],
       "interval": 10,
       "timeout": 5,
-      "retries": 12,
+      "retries": 10,
       "startPeriod": 60
     },
     "logConfiguration": ${log_configuration}
