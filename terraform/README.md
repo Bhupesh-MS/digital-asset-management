@@ -96,6 +96,20 @@ After the first deployment that creates the ALB, update GitHub variables to use 
 
 Run the deploy workflow once more after updating those variables so the web image is rebuilt with the stable API URL. The ECS tasks may still receive public IPs for outbound internet access from the public subnets, but public inbound traffic is through the ALB security group.
 
+## Database Grants
+
+The deploy workflow runs a one-off ECS task before Prisma migrations to apply PostgreSQL privileges for the configured database user. The task runs inside the VPC with the ECS task security group, so it can reach the private RDS endpoint without exposing RDS publicly.
+
+The grant SQL is generated from Terraform variables:
+
+- `DATABASE_NAME`
+- `DATABASE_SCHEMA`
+- `DATABASE_USERNAME`
+- `DATABASE_PASSWORD`
+- the RDS host and port created by Terraform
+
+Do not hardcode database names or usernames in manual SQL for normal deployments. Update the GitHub variables/secrets instead, then rerun the deploy workflow.
+
 ## Local Commands
 
 Run helper scripts:

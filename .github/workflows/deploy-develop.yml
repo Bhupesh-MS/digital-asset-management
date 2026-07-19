@@ -160,6 +160,27 @@ jobs:
           echo "API URL: $(terraform output -raw api_url)"
           echo "MinIO URL: $(terraform output -raw minio_url)"
 
+      - name: Run database grants
+        working-directory: terraform/environments/develop
+        run: |
+          CLUSTER_NAME="$(terraform output -raw ecs_cluster_name)"
+          TASK_DEFINITION="$(terraform output -raw database_grants_task_definition_arn)"
+          SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
+          SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
+          TASK_ARN="$(aws ecs run-task \
+            --cluster "$CLUSTER_NAME" \
+            --task-definition "$TASK_DEFINITION" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
+          EXIT_CODE="$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN" --query 'tasks[0].containers[?name==`grant-db`].exitCode | [0]' --output text)"
+          if [ "$EXIT_CODE" != "0" ]; then
+            aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
+            exit 1
+          fi
+
       - name: Run database migrations
         working-directory: terraform/environments/develop
         run: |

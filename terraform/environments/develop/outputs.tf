@@ -18,6 +18,11 @@ output "migration_task_definition_arn" {
   value       = module.app_ecs.migration_task_definition_arn
 }
 
+output "database_grants_task_definition_arn" {
+  description = "One-off database grants task definition ARN."
+  value       = module.app_ecs.database_grants_task_definition_arn
+}
+
 output "public_subnet_ids" {
   description = "Public subnet IDs used by ECS."
   value       = values(aws_subnet.public)[*].id

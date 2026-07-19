@@ -79,6 +79,37 @@ variable "database_url" {
   sensitive   = true
 }
 
+variable "database_host" {
+  description = "PostgreSQL host used by one-off database maintenance tasks."
+  type        = string
+}
+
+variable "database_port" {
+  description = "PostgreSQL port used by one-off database maintenance tasks."
+  type        = number
+}
+
+variable "database_name" {
+  description = "PostgreSQL database name used by one-off database maintenance tasks."
+  type        = string
+}
+
+variable "database_schema" {
+  description = "PostgreSQL schema name used by one-off database maintenance tasks."
+  type        = string
+}
+
+variable "database_username" {
+  description = "PostgreSQL username used by one-off database maintenance tasks."
+  type        = string
+}
+
+variable "database_password" {
+  description = "PostgreSQL password used by one-off database maintenance tasks."
+  type        = string
+  sensitive   = true
+}
+
 variable "rabbitmq_url" {
   description = "RabbitMQ URL used by API and worker containers."
   type        = string

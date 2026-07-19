@@ -351,6 +351,12 @@ module "app_ecs" {
   api_image                      = var.api_image
   worker_image                   = var.worker_image
   database_url                   = local.database_url
+  database_host                  = module.rds.address
+  database_port                  = module.rds.port
+  database_name                  = var.database_name
+  database_schema                = var.database_schema
+  database_username              = var.database_username
+  database_password              = var.database_password
   rabbitmq_url                   = local.rabbitmq_url
   redis_url                      = "redis://localhost:6379"
   minio_endpoint                 = "localhost"
