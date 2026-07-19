@@ -13,6 +13,11 @@ output "migration_task_definition_arn" {
   value       = aws_ecs_task_definition.migration.arn
 }
 
+output "database_grants_task_definition_arn" {
+  description = "One-off database grants task definition ARN."
+  value       = aws_ecs_task_definition.database_grants.arn
+}
+
 output "execution_role_arn" {
   description = "ECS task execution role ARN."
   value       = aws_iam_role.execution.arn

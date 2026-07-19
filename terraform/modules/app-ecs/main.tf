@@ -169,6 +169,49 @@ resource "aws_ecs_task_definition" "migration" {
   ])
 }
 
+resource "aws_ecs_task_definition" "database_grants" {
+  family                   = "${var.name_prefix}-database-grants"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "grant-db"
+      image     = "postgres:16-alpine"
+      essential = true
+      command = [
+        "sh",
+        "-c",
+        <<-EOT
+cat > /tmp/grants.sql <<'SQL'
+GRANT CONNECT ON DATABASE :"db_name" TO :"db_user";
+GRANT USAGE, CREATE ON SCHEMA :"db_schema" TO :"db_user";
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA :"db_schema" TO :"db_user";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA :"db_schema" TO :"db_user";
+ALTER DEFAULT PRIVILEGES IN SCHEMA :"db_schema" GRANT ALL ON TABLES TO :"db_user";
+ALTER DEFAULT PRIVILEGES IN SCHEMA :"db_schema" GRANT ALL ON SEQUENCES TO :"db_user";
+SQL
+psql -v ON_ERROR_STOP=1 -v db_name="$PGDATABASE" -v db_user="$PGUSER" -v db_schema="$DB_SCHEMA" -f /tmp/grants.sql
+EOT
+      ]
+      environment = [
+        { name = "PGHOST", value = var.database_host },
+        { name = "PGPORT", value = tostring(var.database_port) },
+        { name = "PGDATABASE", value = var.database_name },
+        { name = "PGUSER", value = var.database_username },
+        { name = "PGPASSWORD", value = var.database_password },
+        { name = "DB_SCHEMA", value = var.database_schema }
+      ]
+      portMappings     = []
+      logConfiguration = local.log_configuration
+    }
+  ])
+}
+
 resource "aws_ecs_service" "this" {
   name            = "${var.name_prefix}-service"
   cluster         = var.cluster_id
