@@ -164,7 +164,7 @@ resource "aws_ecs_task_definition" "migration" {
       name             = "migrate"
       image            = var.api_image
       essential        = true
-      command          = ["pnpm", "exec", "prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]
+      command          = ["./node_modules/.bin/prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]
       environment      = local.shared_app_environment
       portMappings     = []
       logConfiguration = local.log_configuration

@@ -18,6 +18,11 @@ output "database_grants_task_definition_arn" {
   value       = aws_ecs_task_definition.database_grants.arn
 }
 
+output "log_group_name" {
+  description = "CloudWatch log group used by ECS containers."
+  value       = aws_cloudwatch_log_group.this.name
+}
+
 output "execution_role_arn" {
   description = "ECS task execution role ARN."
   value       = aws_iam_role.execution.arn
