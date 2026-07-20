@@ -113,6 +113,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push web image
+        timeout-minutes: 30
         run: |
           docker build \
             --build-arg VITE_API_BASE_URL="${{ vars.VITE_API_BASE_URL }}" \
@@ -122,6 +123,7 @@ jobs:
           docker push "${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}"
 
       - name: Build and push api image
+        timeout-minutes: 30
         run: |
           docker build \
             -f infrastructure/docker/api.Dockerfile \
@@ -130,6 +132,7 @@ jobs:
           docker push "${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}"
 
       - name: Build and push worker image
+        timeout-minutes: 30
         run: |
           docker build \
             -f infrastructure/docker/worker.Dockerfile \
@@ -161,12 +164,14 @@ jobs:
           echo "MinIO URL: $(terraform output -raw minio_url)"
 
       - name: Run database grants
+        timeout-minutes: 10
         working-directory: terraform/environments/develop
         run: |
           CLUSTER_NAME="$(terraform output -raw ecs_cluster_name)"
           TASK_DEFINITION="$(terraform output -raw database_grants_task_definition_arn)"
           SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
           SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
+          echo "Starting database grants task in cluster $CLUSTER_NAME"
           TASK_ARN="$(aws ecs run-task \
             --cluster "$CLUSTER_NAME" \
             --task-definition "$TASK_DEFINITION" \
@@ -174,6 +179,11 @@ jobs:
             --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
             --query 'tasks[0].taskArn' \
             --output text)"
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "Failed to start database grants task."
+            exit 1
+          fi
+          echo "Database grants task ARN: $TASK_ARN"
           aws ecs wait tasks-stopped --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
           EXIT_CODE="$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN" --query 'tasks[0].containers[?name==`grant-db`].exitCode | [0]' --output text)"
           if [ "$EXIT_CODE" != "0" ]; then
@@ -182,12 +192,14 @@ jobs:
           fi
 
       - name: Run database migrations
+        timeout-minutes: 10
         working-directory: terraform/environments/develop
         run: |
           CLUSTER_NAME="$(terraform output -raw ecs_cluster_name)"
           TASK_DEFINITION="$(terraform output -raw migration_task_definition_arn)"
           SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
           SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
+          echo "Starting database migration task in cluster $CLUSTER_NAME"
           TASK_ARN="$(aws ecs run-task \
             --cluster "$CLUSTER_NAME" \
             --task-definition "$TASK_DEFINITION" \
@@ -195,6 +207,11 @@ jobs:
             --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
             --query 'tasks[0].taskArn' \
             --output text)"
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "Failed to start database migration task."
+            exit 1
+          fi
+          echo "Database migration task ARN: $TASK_ARN"
           aws ecs wait tasks-stopped --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
           EXIT_CODE="$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN" --query 'tasks[0].containers[?name==`migrate`].exitCode | [0]' --output text)"
           if [ "$EXIT_CODE" != "0" ]; then
