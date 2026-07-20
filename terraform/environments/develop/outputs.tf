@@ -23,6 +23,11 @@ output "database_grants_task_definition_arn" {
   value       = module.app_ecs.database_grants_task_definition_arn
 }
 
+output "ecs_log_group_name" {
+  description = "CloudWatch log group used by ECS containers."
+  value       = module.app_ecs.log_group_name
+}
+
 output "public_subnet_ids" {
   description = "Public subnet IDs used by ECS."
   value       = values(aws_subnet.public)[*].id

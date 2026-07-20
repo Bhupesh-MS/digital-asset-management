@@ -169,6 +169,7 @@ jobs:
         run: |
           CLUSTER_NAME="$(terraform output -raw ecs_cluster_name)"
           TASK_DEFINITION="$(terraform output -raw database_grants_task_definition_arn)"
+          LOG_GROUP="$(terraform output -raw ecs_log_group_name)"
           SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
           SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
           echo "Starting database grants task in cluster $CLUSTER_NAME"
@@ -189,7 +190,6 @@ jobs:
           if [ "$EXIT_CODE" != "0" ]; then
             aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
             TASK_ID="${TASK_ARN##*/}"
-            LOG_GROUP="/ecs/${TF_VAR_project_name}-${TF_VAR_environment}"
             LOG_STREAM="ecs/grant-db/${TASK_ID}"
             echo "Database grants logs from ${LOG_GROUP}/${LOG_STREAM}:"
             aws logs get-log-events \
@@ -207,6 +207,7 @@ jobs:
         run: |
           CLUSTER_NAME="$(terraform output -raw ecs_cluster_name)"
           TASK_DEFINITION="$(terraform output -raw migration_task_definition_arn)"
+          LOG_GROUP="$(terraform output -raw ecs_log_group_name)"
           SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
           SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
           echo "Starting database migration task in cluster $CLUSTER_NAME"
@@ -227,7 +228,6 @@ jobs:
           if [ "$EXIT_CODE" != "0" ]; then
             aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
             TASK_ID="${TASK_ARN##*/}"
-            LOG_GROUP="/ecs/${TF_VAR_project_name}-${TF_VAR_environment}"
             LOG_STREAM="ecs/migrate/${TASK_ID}"
             echo "Database migration logs from ${LOG_GROUP}/${LOG_STREAM}:"
             aws logs get-log-events \
