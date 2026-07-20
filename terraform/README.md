@@ -64,6 +64,8 @@ Do not add `DATABASE_URL` as a GitHub secret or variable for this Terraform depl
 - `DATABASE_SCHEMA`
 - the RDS endpoint created by Terraform
 
+Terraform also appends `sslmode=require&uselibpqcompat=true` because the RDS PostgreSQL connection must use SSL when encryption is enforced by the database.
+
 Do not add `REDIS_URL` either. Redis runs as a container in the same ECS task, so Terraform sets it internally to `redis://localhost:6379`.
 
 RabbitMQ and MinIO also run inside the same ECS task. Terraform sets the internal URLs/endpoints to localhost and uses only the username/password/access-key values from GitHub Secrets or Variables.
