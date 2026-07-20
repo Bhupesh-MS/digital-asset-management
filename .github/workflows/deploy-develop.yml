@@ -188,6 +188,16 @@ jobs:
           EXIT_CODE="$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN" --query 'tasks[0].containers[?name==`grant-db`].exitCode | [0]' --output text)"
           if [ "$EXIT_CODE" != "0" ]; then
             aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
+            TASK_ID="${TASK_ARN##*/}"
+            LOG_GROUP="/ecs/${TF_VAR_project_name}-${TF_VAR_environment}"
+            LOG_STREAM="ecs/grant-db/${TASK_ID}"
+            echo "Database grants logs from ${LOG_GROUP}/${LOG_STREAM}:"
+            aws logs get-log-events \
+              --log-group-name "$LOG_GROUP" \
+              --log-stream-name "$LOG_STREAM" \
+              --limit 100 \
+              --query 'events[].message' \
+              --output text || true
             exit 1
           fi
 
@@ -216,5 +226,15 @@ jobs:
           EXIT_CODE="$(aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN" --query 'tasks[0].containers[?name==`migrate`].exitCode | [0]' --output text)"
           if [ "$EXIT_CODE" != "0" ]; then
             aws ecs describe-tasks --cluster "$CLUSTER_NAME" --tasks "$TASK_ARN"
+            TASK_ID="${TASK_ARN##*/}"
+            LOG_GROUP="/ecs/${TF_VAR_project_name}-${TF_VAR_environment}"
+            LOG_STREAM="ecs/migrate/${TASK_ID}"
+            echo "Database migration logs from ${LOG_GROUP}/${LOG_STREAM}:"
+            aws logs get-log-events \
+              --log-group-name "$LOG_GROUP" \
+              --log-stream-name "$LOG_STREAM" \
+              --limit 100 \
+              --query 'events[].message' \
+              --output text || true
             exit 1
           fi
