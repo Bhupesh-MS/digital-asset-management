@@ -11,7 +11,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @dam/db generate
 RUN pnpm turbo run build --filter=@dam/api...
-RUN pnpm prune --prod
+RUN pnpm prune --prod --ignore-scripts
 
 FROM base AS runtime
 ENV NODE_ENV=production
