@@ -2,6 +2,8 @@ locals {
   shared_app_environment = [
     { name = "NODE_ENV", value = "production" },
     { name = "DATABASE_URL", value = var.database_url },
+    { name = "DATABASE_SSL", value = "true" },
+    { name = "DATABASE_SSL_REJECT_UNAUTHORIZED", value = "false" },
     { name = "RABBITMQ_URL", value = var.rabbitmq_url },
     { name = "REDIS_URL", value = var.redis_url },
     { name = "MINIO_ENDPOINT", value = var.minio_endpoint },

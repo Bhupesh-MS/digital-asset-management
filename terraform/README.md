@@ -64,7 +64,7 @@ Do not add `DATABASE_URL` as a GitHub secret or variable for this Terraform depl
 - `DATABASE_SCHEMA`
 - the RDS endpoint created by Terraform
 
-Terraform also appends `sslmode=require&uselibpqcompat=true` because the RDS PostgreSQL connection must use SSL when encryption is enforced by the database.
+Terraform also appends `sslmode=require&uselibpqcompat=true` because the RDS PostgreSQL connection must use SSL when encryption is enforced by the database. ECS also sets `DATABASE_SSL=true` and `DATABASE_SSL_REJECT_UNAUTHORIZED=false` so the Prisma PostgreSQL adapter passes an explicit SSL config to the underlying `pg` pool.
 
 Do not add `REDIS_URL` either. Redis runs as a container in the same ECS task, so Terraform sets it internally to `redis://localhost:6379`.
 
