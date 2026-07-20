@@ -9,6 +9,6 @@ locals {
     ManagedBy   = "terraform"
   }
 
-  database_url = "postgresql://${var.database_username}:${urlencode(var.database_password)}@${module.rds.address}:${module.rds.port}/${var.database_name}?schema=${var.database_schema}"
+  database_url = "postgresql://${var.database_username}:${urlencode(var.database_password)}@${module.rds.address}:${module.rds.port}/${var.database_name}?schema=${var.database_schema}&sslmode=require&uselibpqcompat=true"
   rabbitmq_url = "amqp://${var.rabbitmq_username}:${urlencode(var.rabbitmq_password)}@localhost:5672"
 }
