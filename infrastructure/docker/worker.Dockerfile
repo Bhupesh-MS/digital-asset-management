@@ -10,12 +10,9 @@ FROM base AS build
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@dam/worker...
-RUN pnpm prune --prod --ignore-scripts
+RUN pnpm --filter @dam/worker deploy --prod /app/deploy
 
 FROM base AS runtime
 ENV NODE_ENV=production
-COPY --from=build /app/package.json /app/pnpm-lock.yaml* /app/pnpm-workspace.yaml ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/worker ./apps/worker
-COPY --from=build /app/packages ./packages
-CMD ["pnpm", "--filter", "@dam/worker", "start"]
+COPY --from=build /app/deploy ./
+CMD ["node", "dist/index.js"]

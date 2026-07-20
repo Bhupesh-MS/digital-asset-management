@@ -11,15 +11,12 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @dam/db generate
 RUN pnpm turbo run build --filter=@dam/api...
-RUN pnpm prune --prod --ignore-scripts
+RUN pnpm --filter @dam/api deploy --prod /app/deploy
 
 FROM base AS runtime
 ENV NODE_ENV=production
-COPY --from=build /app/package.json /app/pnpm-lock.yaml* /app/pnpm-workspace.yaml ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api ./apps/api
-COPY --from=build /app/packages ./packages
+COPY --from=build /app/deploy ./
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 EXPOSE 3000
-CMD ["pnpm", "--filter", "@dam/api", "start"]
+CMD ["node", "dist/index.js"]

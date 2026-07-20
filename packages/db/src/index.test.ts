@@ -29,3 +29,15 @@ test("pool config enables SSL when connection string requires it", async () => {
   assert.deepEqual(config.ssl, { rejectUnauthorized: false });
   assert.match(config.connectionString, /[?&]ssl=true(?:&|$)/);
 });
+
+test("pool config enables SSL for AWS RDS hosts", async () => {
+  const { createPoolConfig } = await import("./index.js");
+  const config = createPoolConfig(
+    "postgresql://dam:dam@dam-develop-postgres.abc123.ap-south-1.rds.amazonaws.com:5432/dam?schema=public",
+    {}
+  );
+
+  assert.deepEqual(config.ssl, { rejectUnauthorized: false });
+  assert.match(config.connectionString, /[?&]ssl=true(?:&|$)/);
+  assert.match(config.connectionString, /[?&]sslmode=require(?:&|$)/);
+});

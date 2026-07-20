@@ -12,7 +12,7 @@ export async function seedAdmin() {
       await prisma.user.create({
         data: {
           email: adminEmail,
-          password: "$2b$10$Im0Cvcog8xo17EJK0rnJIeesJp9l1BXBinpNhYiNCcoQwEvJCQaGG",
+          password: "$2y$10$r3OdARLlfsd0vdcbP8Yv4e3XAn.VintmppveRn0qk/hRBzd6Ifi/u", // Admin@123
           role: "ADMIN"
         }
       });
