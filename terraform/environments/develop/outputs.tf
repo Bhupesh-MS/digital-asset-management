@@ -63,6 +63,11 @@ output "minio_url" {
   value       = "http://${aws_lb.app.dns_name}:9000"
 }
 
+output "minio_console_url" {
+  description = "Browser-facing MinIO console URL served by the application load balancer."
+  value       = "http://${aws_lb.app.dns_name}:9001"
+}
+
 output "rds_endpoint" {
   description = "RDS endpoint including port."
   value       = module.rds.endpoint

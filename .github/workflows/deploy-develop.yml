@@ -162,6 +162,7 @@ jobs:
           echo "Web URL: $(terraform output -raw web_url)"
           echo "API URL: $(terraform output -raw api_url)"
           echo "MinIO URL: $(terraform output -raw minio_url)"
+          echo "MinIO Console URL: $(terraform output -raw minio_console_url)"
 
       - name: Run database grants
         timeout-minutes: 10

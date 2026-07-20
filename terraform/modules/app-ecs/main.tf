@@ -254,7 +254,17 @@ resource "aws_ecs_service" "this" {
     }
   }
 
-  health_check_grace_period_seconds = var.web_target_group_arn == null && var.api_target_group_arn == null && var.minio_target_group_arn == null ? null : 120
+  dynamic "load_balancer" {
+    for_each = var.minio_console_target_group_arn == null ? [] : [var.minio_console_target_group_arn]
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = "minio"
+      container_port   = 9001
+    }
+  }
+
+  health_check_grace_period_seconds = var.web_target_group_arn == null && var.api_target_group_arn == null && var.minio_target_group_arn == null && var.minio_console_target_group_arn == null ? null : 120
 
   network_configuration {
     subnets          = var.subnet_ids

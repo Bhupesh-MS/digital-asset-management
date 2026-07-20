@@ -82,6 +82,14 @@ resource "aws_security_group" "ecs_task" {
     security_groups = [aws_security_group.alb.id]
   }
 
+  ingress {
+    description     = "MinIO Console from ALB"
+    from_port       = 9001
+    to_port         = 9001
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -115,6 +123,14 @@ resource "aws_security_group" "alb" {
     description = "MinIO API"
     from_port   = 9000
     to_port     = 9000
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_public_cidr_blocks
+  }
+
+  ingress {
+    description = "MinIO Console"
+    from_port   = 9001
+    to_port     = 9001
     protocol    = "tcp"
     cidr_blocks = var.allowed_public_cidr_blocks
   }
@@ -252,6 +268,25 @@ resource "aws_lb_target_group" "minio" {
   }
 }
 
+resource "aws_lb_target_group" "minio_console" {
+  name        = "${local.minio_console_tg_prefix}-minio-console"
+  port        = 9001
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.this.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200-399"
+    path                = "/"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 3
+  }
+}
+
 resource "aws_lb_listener" "web" {
   load_balancer_arn = aws_lb.app.arn
   port              = 80
@@ -282,6 +317,17 @@ resource "aws_lb_listener" "minio" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.minio.arn
+  }
+}
+
+resource "aws_lb_listener" "minio_console" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 9001
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.minio_console.arn
   }
 }
 
@@ -344,6 +390,7 @@ module "app_ecs" {
   web_target_group_arn           = aws_lb_target_group.web.arn
   api_target_group_arn           = aws_lb_target_group.api.arn
   minio_target_group_arn         = aws_lb_target_group.minio.arn
+  minio_console_target_group_arn = aws_lb_target_group.minio_console.arn
   task_cpu                       = var.task_cpu
   task_memory                    = var.task_memory
   desired_count                  = var.desired_count
@@ -390,6 +437,7 @@ module "app_ecs" {
     aws_efs_mount_target.public,
     aws_lb_listener.web,
     aws_lb_listener.api,
-    aws_lb_listener.minio
+    aws_lb_listener.minio,
+    aws_lb_listener.minio_console
   ]
 }
