@@ -14,7 +14,10 @@ export function createPoolConfig(
   connectionString: string,
   env: NodeJS.ProcessEnv = process.env
 ): { connectionString: string; ssl?: { rejectUnauthorized: boolean } } {
-  const requiresSsl = env.DATABASE_SSL === "true" || connectionStringRequiresSsl(connectionString);
+  const requiresSsl =
+    env.DATABASE_SSL === "true" ||
+    connectionStringRequiresSsl(connectionString) ||
+    connectionStringTargetsAwsRds(connectionString);
   const normalizedConnectionString = requiresSsl
     ? connectionStringWithSslEnabled(connectionString)
     : connectionString;
@@ -38,6 +41,15 @@ function connectionStringRequiresSsl(connectionString: string): boolean {
     return /(?:[?&])(?:ssl=true|ssl=1|sslmode=(require|verify-ca|verify-full))(?:&|$)/i.test(
       connectionString
     );
+  }
+}
+
+function connectionStringTargetsAwsRds(connectionString: string): boolean {
+  try {
+    const { hostname } = new URL(connectionString);
+    return hostname.endsWith(".rds.amazonaws.com");
+  } catch {
+    return /\.rds\.amazonaws\.com(?::\d+)?(?:\/|\?|$)/i.test(connectionString);
   }
 }
 
