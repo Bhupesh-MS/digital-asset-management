@@ -15,6 +15,8 @@ test("pool config enables SSL when DATABASE_SSL is true", async () => {
   });
 
   assert.deepEqual(config.ssl, { rejectUnauthorized: false });
+  assert.match(config.connectionString, /[?&]ssl=true(?:&|$)/);
+  assert.match(config.connectionString, /[?&]sslmode=require(?:&|$)/);
 });
 
 test("pool config enables SSL when connection string requires it", async () => {
@@ -25,4 +27,5 @@ test("pool config enables SSL when connection string requires it", async () => {
   );
 
   assert.deepEqual(config.ssl, { rejectUnauthorized: false });
+  assert.match(config.connectionString, /[?&]ssl=true(?:&|$)/);
 });
