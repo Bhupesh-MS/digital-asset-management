@@ -204,6 +204,7 @@ EOT
         { name = "PGDATABASE", value = var.database_name },
         { name = "PGUSER", value = var.database_username },
         { name = "PGPASSWORD", value = var.database_password },
+        { name = "PGCONNECT_TIMEOUT", value = "15" },
         { name = "DB_SCHEMA", value = var.database_schema }
       ]
       portMappings     = []
