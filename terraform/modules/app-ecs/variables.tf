@@ -36,6 +36,12 @@ variable "minio_target_group_arn" {
   default     = null
 }
 
+variable "minio_console_target_group_arn" {
+  description = "Optional ALB target group ARN for the MinIO console."
+  type        = string
+  default     = null
+}
+
 variable "assign_public_ip" {
   description = "Whether the ECS task gets a public IP."
   type        = bool
