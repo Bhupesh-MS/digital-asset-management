@@ -156,38 +156,6 @@ jobs:
           TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
         run: terraform apply -auto-approve
 
-      - name: Wait for ECS service deployment
-        timeout-minutes: 15
-        working-directory: terraform/environments/develop
-        run: |
-          CLUSTER_NAME="$(terraform output -raw ecs_cluster_name)"
-          SERVICE_NAME="$(terraform output -raw ecs_service_name)"
-          TASK_DEFINITION="$(terraform output -raw ecs_task_definition_arn)"
-          echo "Waiting for ECS service ${SERVICE_NAME} to stabilize on ${TASK_DEFINITION}"
-          WAITER_EXIT_CODE=0
-          aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" || WAITER_EXIT_CODE=$?
-          aws ecs describe-services \
-            --cluster "$CLUSTER_NAME" \
-            --services "$SERVICE_NAME" \
-            --query 'services[0].{serviceName:serviceName,taskDefinition:taskDefinition,runningCount:runningCount,pendingCount:pendingCount,deployments:deployments[].{status:status,taskDefinition:taskDefinition,runningCount:runningCount,pendingCount:pendingCount,rolloutState:rolloutState,rolloutStateReason:rolloutStateReason}}'
-          if [ "$WAITER_EXIT_CODE" != "0" ]; then
-            echo "Recent stopped tasks:"
-            STOPPED_TASKS="$(aws ecs list-tasks \
-              --cluster "$CLUSTER_NAME" \
-              --service-name "$SERVICE_NAME" \
-              --desired-status STOPPED \
-              --max-results 10 \
-              --query 'taskArns' \
-              --output text)"
-            if [ -n "$STOPPED_TASKS" ]; then
-              aws ecs describe-tasks \
-                --cluster "$CLUSTER_NAME" \
-                --tasks $STOPPED_TASKS \
-                --query 'tasks[].{taskArn:taskArn,taskDefinitionArn:taskDefinitionArn,stoppedReason:stoppedReason,containers:containers[].{name:name,exitCode:exitCode,reason:reason,lastStatus:lastStatus}}'
-            fi
-            exit "$WAITER_EXIT_CODE"
-          fi
-
       - name: Show load balancer URLs
         working-directory: terraform/environments/develop
         run: |
