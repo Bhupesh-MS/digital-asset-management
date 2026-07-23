@@ -1,5 +1,8 @@
 import { prisma } from "@dam/db";
 import { logger } from "@dam/logger";
+import bcrypt from "bcryptjs";
+
+const DEFAULT_ADMIN_PASSWORD = "Admin@123"; // Default password for the seeded admin user.
 
 export async function seedAdmin() {
   try {
@@ -14,10 +17,12 @@ export async function seedAdmin() {
     });
 
     if (!existingAdmin) {
+      const passwordHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
+
       await prisma.user.create({
         data: {
           email: adminEmail,
-          password: "$2y$10$r3OdARLlfsd0vdcbP8Yv4e3XAn.VintmppveRn0qk/hRBzd6Ifi/u", // Admin@123
+          password: passwordHash,
           role: "ADMIN"
         }
       });
