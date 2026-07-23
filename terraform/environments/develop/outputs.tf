@@ -33,6 +33,11 @@ output "public_subnet_ids" {
   value       = values(aws_subnet.public)[*].id
 }
 
+output "private_subnet_ids" {
+  description = "Private subnet IDs used by RDS."
+  value       = values(aws_subnet.private)[*].id
+}
+
 output "ecs_task_security_group_id" {
   description = "ECS task security group ID."
   value       = aws_security_group.ecs_task.id
