@@ -27,6 +27,17 @@ variable "public_subnet_cidrs" {
   default     = ["10.20.1.0/24", "10.20.2.0/24"]
 }
 
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets used by private infrastructure such as RDS."
+  type        = list(string)
+  default     = ["10.20.101.0/24", "10.20.102.0/24"]
+
+  validation {
+    condition     = length(var.private_subnet_cidrs) >= 2
+    error_message = "At least two private subnet CIDR blocks are required for the RDS subnet group."
+  }
+}
+
 variable "allowed_public_cidr_blocks" {
   description = "CIDR blocks allowed to reach public web and API ports."
   type        = list(string)

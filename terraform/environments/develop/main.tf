@@ -33,6 +33,19 @@ resource "aws_subnet" "public" {
   }
 }
 
+resource "aws_subnet" "private" {
+  for_each = { for index, cidr in var.private_subnet_cidrs : tostring(index) => cidr }
+
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = each.value
+  availability_zone       = data.aws_availability_zones.available.names[tonumber(each.key)]
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name = "${local.name_prefix}-private-${tonumber(each.key) + 1}"
+  }
+}
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
 
@@ -46,11 +59,26 @@ resource "aws_route_table" "public" {
   }
 }
 
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.this.id
+
+  tags = {
+    Name = "${local.name_prefix}-private-rt"
+  }
+}
+
 resource "aws_route_table_association" "public" {
   for_each = aws_subnet.public
 
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  for_each = aws_subnet.private
+
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private.id
 }
 
 resource "aws_security_group" "ecs_task" {
@@ -369,7 +397,7 @@ module "rds" {
   source = "../../modules/rds"
 
   name_prefix         = local.name_prefix
-  subnet_ids          = values(aws_subnet.public)[*].id
+  subnet_ids          = values(aws_subnet.private)[*].id
   security_group_ids  = [aws_security_group.rds.id]
   database_name       = var.database_name
   database_username   = var.database_username

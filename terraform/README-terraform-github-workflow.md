@@ -21,7 +21,7 @@ The GitHub workflow does this:
 
 The Terraform code creates this AWS infrastructure:
 
-1. VPC, public subnets, internet gateway, and public routes.
+1. VPC, public subnets, private subnets, internet gateway, and route tables.
 2. Security groups for the load balancer, ECS tasks, RDS, and EFS.
 3. EFS file system and access points for Redis, RabbitMQ, and MinIO data.
 4. Application Load Balancer listeners and target groups.
@@ -598,6 +598,15 @@ variable "public_subnet_cidrs" {
 Defines two public subnets.
 
 ```hcl
+variable "private_subnet_cidrs" {
+  type    = list(string)
+  default = ["10.20.101.0/24", "10.20.102.0/24"]
+}
+```
+
+Defines two private subnets used by private infrastructure such as RDS.
+
+```hcl
 variable "database_password" {
   type      = string
   sensitive = true
@@ -677,6 +686,22 @@ map_public_ip_on_launch = true
 
 Instances or tasks launched in this subnet can receive public IPs.
 
+#### Private Subnets
+
+```hcl
+resource "aws_subnet" "private" {
+  for_each = { for index, cidr in var.private_subnet_cidrs : tostring(index) => cidr }
+}
+```
+
+Creates one private subnet for each CIDR in `var.private_subnet_cidrs`.
+
+```hcl
+map_public_ip_on_launch = false
+```
+
+Resources launched in these subnets do not automatically receive public IPs.
+
 #### Public Route Table
 
 ```hcl
@@ -688,6 +713,16 @@ route {
 
 Routes outbound internet traffic through the internet gateway.
 
+#### Private Route Table
+
+```hcl
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.this.id
+}
+```
+
+Creates a route table for private subnets. It has only the implicit local VPC route, so there is no direct route from these subnets to the internet gateway.
+
 #### Route Table Associations
 
 ```hcl
@@ -697,6 +732,14 @@ resource "aws_route_table_association" "public" {
 ```
 
 Attaches the public route table to every public subnet.
+
+```hcl
+resource "aws_route_table_association" "private" {
+  for_each = aws_subnet.private
+}
+```
+
+Attaches the private route table to every private subnet.
 
 #### Security Groups
 
@@ -1739,6 +1782,12 @@ terraform output -json public_subnet_ids
 
 Prints output as JSON. The workflow pipes this to `jq` to build the subnet list for `aws ecs run-task`.
 
+```sh
+terraform output -json private_subnet_ids
+```
+
+Prints the private subnet IDs used by the RDS subnet group.
+
 ### `terraform state list`
 
 ```sh
@@ -1797,7 +1846,7 @@ The RDS database is private:
 publicly_accessible = false
 ```
 
-Only ECS tasks can connect to it through the RDS security group.
+It is placed in the private subnets through the RDS subnet group. Only ECS tasks can connect to it through the RDS security group.
 
 The ECS task gets a public IP:
 

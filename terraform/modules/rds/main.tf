@@ -1,6 +1,10 @@
 resource "aws_db_subnet_group" "this" {
-  name       = "${var.name_prefix}-db-subnets"
+  name       = "${var.name_prefix}-private-db-subnets"
   subnet_ids = var.subnet_ids
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_db_instance" "this" {
