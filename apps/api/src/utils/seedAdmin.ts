@@ -33,5 +33,6 @@ export async function seedAdmin() {
     logger.info({ adminEmail }, "Admin user seeded successfully.");
   } catch (error) {
     logger.error({ err: error }, "Failed to seed admin user");
+    throw error;
   }
 }

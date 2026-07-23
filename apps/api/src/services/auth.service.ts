@@ -33,7 +33,7 @@ export class AuthService {
 
     const matches = await bcrypt.compare(password, user.password);
     if (!matches) {
-      throw new HttpError(401, "Invalid admin credentials");
+      throw new HttpError(401, "Invalid password");
     }
 
     const token = this.jwtService.sign({
