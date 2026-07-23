@@ -108,6 +108,7 @@ jobs:
           echo "web_repo=$(terraform output -raw ecr_web_repository_url)" >> "$GITHUB_OUTPUT"
           echo "api_repo=$(terraform output -raw ecr_api_repository_url)" >> "$GITHUB_OUTPUT"
           echo "worker_repo=$(terraform output -raw ecr_worker_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "postgres_client_repo=$(terraform output -raw ecr_postgres_client_repository_url)" >> "$GITHUB_OUTPUT"
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
@@ -140,12 +141,22 @@ jobs:
             .
           docker push "${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}"
 
+      - name: Build and push PostgreSQL client image
+        timeout-minutes: 30
+        run: |
+          docker build \
+            -f infrastructure/docker/postgres-client.Dockerfile \
+            -t "${{ steps.ecr.outputs.postgres_client_repo }}:${{ github.sha }}" \
+            .
+          docker push "${{ steps.ecr.outputs.postgres_client_repo }}:${{ github.sha }}"
+
       - name: Terraform plan
         working-directory: terraform/environments/develop
         env:
           TF_VAR_web_image: ${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}
           TF_VAR_api_image: ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}
           TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
+          TF_VAR_postgres_client_image: ${{ steps.ecr.outputs.postgres_client_repo }}:${{ github.sha }}
         run: terraform plan
 
       - name: Terraform apply
@@ -154,6 +165,7 @@ jobs:
           TF_VAR_web_image: ${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}
           TF_VAR_api_image: ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}
           TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
+          TF_VAR_postgres_client_image: ${{ steps.ecr.outputs.postgres_client_repo }}:${{ github.sha }}
         run: terraform apply -auto-approve
 
       - name: Show load balancer URLs
@@ -172,13 +184,13 @@ jobs:
           TASK_DEFINITION="$(terraform output -raw database_grants_task_definition_arn)"
           LOG_GROUP="$(terraform output -raw ecs_log_group_name)"
           SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
-          SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
+          SUBNETS="$(terraform output -json private_subnet_ids | jq -r 'join(",")')"
           echo "Starting database grants task in cluster $CLUSTER_NAME"
           TASK_ARN="$(aws ecs run-task \
             --cluster "$CLUSTER_NAME" \
             --task-definition "$TASK_DEFINITION" \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=DISABLED}" \
             --query 'tasks[0].taskArn' \
             --output text)"
           if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
@@ -210,13 +222,13 @@ jobs:
           TASK_DEFINITION="$(terraform output -raw migration_task_definition_arn)"
           LOG_GROUP="$(terraform output -raw ecs_log_group_name)"
           SECURITY_GROUP="$(terraform output -raw ecs_task_security_group_id)"
-          SUBNETS="$(terraform output -json public_subnet_ids | jq -r 'join(",")')"
+          SUBNETS="$(terraform output -json private_subnet_ids | jq -r 'join(",")')"
           echo "Starting database migration task in cluster $CLUSTER_NAME"
           TASK_ARN="$(aws ecs run-task \
             --cluster "$CLUSTER_NAME" \
             --task-definition "$TASK_DEFINITION" \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=DISABLED}" \
             --query 'tasks[0].taskArn' \
             --output text)"
           if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then

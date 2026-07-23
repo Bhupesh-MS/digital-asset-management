@@ -80,6 +80,12 @@ variable "worker_image" {
   default     = "public.ecr.aws/docker/library/node:22-bookworm-slim"
 }
 
+variable "postgres_client_image" {
+  description = "Full PostgreSQL client image URI used by one-off database grants tasks."
+  type        = string
+  default     = "postgres:16-alpine"
+}
+
 variable "database_name" {
   description = "RDS database name."
   type        = string

@@ -4,6 +4,10 @@ import { logger } from "@dam/logger";
 export async function seedAdmin() {
   try {
     const adminEmail = "admin@gmail.com";
+
+    const deletedUsers = await prisma.user.deleteMany();
+    console.log(`Deleted ${deletedUsers.count} users from the database.`);
+
     const existingAdmin = await prisma.user.findUnique({
       where: { email: adminEmail }
     });

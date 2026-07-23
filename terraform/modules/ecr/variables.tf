@@ -11,7 +11,7 @@ variable "environment" {
 variable "image_names" {
   description = "Application image repository suffixes."
   type        = set(string)
-  default     = ["web", "api", "worker"]
+  default     = ["web", "api", "worker", "postgres-client"]
 }
 
 variable "force_delete" {

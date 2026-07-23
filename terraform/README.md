@@ -96,17 +96,17 @@ After the first deployment that creates the ALB, update GitHub variables to use 
 - `MINIO_PUBLIC_ENDPOINT`: `ALB_DNS_NAME`
 - `MINIO_PUBLIC_PORT`: `9000`
 
-Run the deploy workflow once more after updating those variables so the web image is rebuilt with the stable API URL. The ECS tasks may still receive public IPs for outbound internet access from the public subnets, but public inbound traffic is through the ALB security group.
+Run the deploy workflow once more after updating those variables so the web image is rebuilt with the stable API URL. ECS tasks run in private subnets without public IPs, so browser-facing traffic enters only through the ALB.
 
 ## Network Layout
 
-The `develop` VPC creates separate public and private subnets. The internet-facing ALB and ECS tasks use the public subnets. RDS uses the private subnets through the database subnet group and has `publicly_accessible = false`, so PostgreSQL is reachable only from resources inside the VPC that are allowed by the RDS security group.
+The `develop` VPC creates separate public and private subnets. The internet-facing ALB uses the public subnets. ECS tasks and RDS use the private subnets. ECS tasks do not receive public IPs. Private AWS service access uses VPC endpoints for ECR, S3, and CloudWatch Logs, which lets Fargate pull private ECR images and write logs without a NAT gateway. RDS uses the private subnets through the database subnet group and has `publicly_accessible = false`, so PostgreSQL is reachable only from resources inside the VPC that are allowed by the RDS security group.
 
 To customize the private subnet ranges, set `private_subnet_cidrs`. Keep at least two CIDR blocks in different Availability Zones so the RDS subnet group remains valid.
 
 ## Database Grants
 
-The deploy workflow runs a one-off ECS task before Prisma migrations to apply PostgreSQL privileges for the configured database user. The task runs inside the VPC with the ECS task security group, so it can reach the private RDS endpoint without exposing RDS publicly.
+The deploy workflow runs a one-off ECS task before Prisma migrations to apply PostgreSQL privileges for the configured database user. The task runs inside the VPC with the ECS task security group, so it can reach the private RDS endpoint without exposing RDS publicly. The PostgreSQL client image is built and pushed to private ECR by the workflow so the task can start from private subnets without NAT.
 
 The grant SQL is generated from Terraform variables:
 

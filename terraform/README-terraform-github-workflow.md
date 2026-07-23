@@ -670,6 +670,17 @@ resource "aws_internet_gateway" "this" {
 
 Gives the VPC a path to the public internet.
 
+#### VPC Endpoints
+
+```hcl
+resource "aws_vpc_endpoint" "ecr_api" {}
+resource "aws_vpc_endpoint" "ecr_dkr" {}
+resource "aws_vpc_endpoint" "logs" {}
+resource "aws_vpc_endpoint" "s3" {}
+```
+
+Gives private ECS tasks access to ECR, S3, and CloudWatch Logs without assigning public IPs or using a NAT gateway.
+
 #### Public Subnets
 
 ```hcl
@@ -721,7 +732,7 @@ resource "aws_route_table" "private" {
 }
 ```
 
-Creates a route table for private subnets. It has only the implicit local VPC route, so there is no direct route from these subnets to the internet gateway.
+Creates a route table for private subnets. It keeps only the implicit local VPC route plus routes added by gateway endpoints such as S3. There is no direct route to the internet gateway and no NAT route.
 
 #### Route Table Associations
 
@@ -1127,7 +1138,7 @@ Defines a one-off task that applies Prisma migrations.
 resource "aws_ecs_task_definition" "database_grants" {}
 ```
 
-Defines a one-off task using the `postgres:16-alpine` image. It writes a SQL file and runs `psql` to grant database and schema permissions.
+Defines a one-off task using the configured PostgreSQL client image. The deploy workflow builds that image from `postgres:16-alpine` and pushes it to private ECR so the task can run from private subnets without NAT.
 
 #### ECS Service
 
@@ -1777,16 +1788,16 @@ terraform output -raw web_url
 Prints one output as plain text.
 
 ```sh
-terraform output -json public_subnet_ids
+terraform output -json private_subnet_ids
 ```
 
 Prints output as JSON. The workflow pipes this to `jq` to build the subnet list for `aws ecs run-task`.
 
 ```sh
-terraform output -json private_subnet_ids
+terraform output -json public_subnet_ids
 ```
 
-Prints the private subnet IDs used by the RDS subnet group.
+Prints the public subnet IDs used by the internet-facing ALB.
 
 ### `terraform state list`
 
@@ -1848,13 +1859,13 @@ publicly_accessible = false
 
 It is placed in the private subnets through the RDS subnet group. Only ECS tasks can connect to it through the RDS security group.
 
-The ECS task gets a public IP:
+The ECS service and one-off tasks run without public IPs:
 
 ```hcl
-assign_public_ip = true
+assign_public_ip = false
 ```
 
-because this environment uses public subnets.
+They use private subnets. Public browser traffic reaches the public ALB first, and the ALB forwards traffic to the ECS task security group over private VPC networking.
 
 Redis, RabbitMQ, MinIO, API, worker, and web all run inside one ECS task definition. This means `localhost` works between those containers inside the same task.
 

@@ -29,12 +29,12 @@ output "ecs_log_group_name" {
 }
 
 output "public_subnet_ids" {
-  description = "Public subnet IDs used by ECS."
+  description = "Public subnet IDs used by the internet-facing ALB."
   value       = values(aws_subnet.public)[*].id
 }
 
 output "private_subnet_ids" {
-  description = "Private subnet IDs used by RDS."
+  description = "Private subnet IDs used by ECS tasks and RDS."
   value       = values(aws_subnet.private)[*].id
 }
 
@@ -91,4 +91,9 @@ output "ecr_api_repository_url" {
 output "ecr_worker_repository_url" {
   description = "Worker ECR repository URL."
   value       = module.ecr.repository_urls["worker"]
+}
+
+output "ecr_postgres_client_repository_url" {
+  description = "PostgreSQL client ECR repository URL used by database grants tasks."
+  value       = module.ecr.repository_urls["postgres-client"]
 }

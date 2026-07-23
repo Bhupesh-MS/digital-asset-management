@@ -184,7 +184,7 @@ resource "aws_ecs_task_definition" "database_grants" {
   container_definitions = jsonencode([
     {
       name      = "grant-db"
-      image     = "postgres:16-alpine"
+      image     = var.postgres_client_image
       essential = true
       command = [
         "sh",
