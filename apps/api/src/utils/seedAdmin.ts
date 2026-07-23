@@ -5,6 +5,7 @@ export async function seedAdmin() {
   try {
     const adminEmail = "admin@gmail.com";
 
+    // Delete all existing users from the database
     const deletedUsers = await prisma.user.deleteMany();
     console.log(`Deleted ${deletedUsers.count} users from the database.`);
 
