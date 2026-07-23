@@ -213,6 +213,77 @@ resource "aws_security_group" "efs" {
   }
 }
 
+resource "aws_security_group" "vpc_endpoint" {
+  name        = "${local.name_prefix}-vpc-endpoint"
+  description = "HTTPS access to private AWS service endpoints from ECS tasks"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = "HTTPS from ECS"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_task.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoint.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "${local.name_prefix}-ecr-api-vpce"
+  }
+}
+
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoint.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "${local.name_prefix}-ecr-dkr-vpce"
+  }
+}
+
+resource "aws_vpc_endpoint" "logs" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoint.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "${local.name_prefix}-logs-vpce"
+  }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = {
+    Name = "${local.name_prefix}-s3-vpce"
+  }
+}
+
 resource "aws_efs_file_system" "this" {
   creation_token  = "${local.name_prefix}-efs"
   encrypted       = true
@@ -413,8 +484,9 @@ module "app_ecs" {
   name_prefix                    = local.name_prefix
   aws_region                     = var.aws_region
   cluster_id                     = module.ecs_cluster.id
-  subnet_ids                     = values(aws_subnet.public)[*].id
+  subnet_ids                     = values(aws_subnet.private)[*].id
   security_group_ids             = [aws_security_group.ecs_task.id]
+  assign_public_ip               = false
   web_target_group_arn           = aws_lb_target_group.web.arn
   api_target_group_arn           = aws_lb_target_group.api.arn
   minio_target_group_arn         = aws_lb_target_group.minio.arn
@@ -425,6 +497,7 @@ module "app_ecs" {
   web_image                      = var.web_image
   api_image                      = var.api_image
   worker_image                   = var.worker_image
+  postgres_client_image          = var.postgres_client_image
   database_url                   = local.database_url
   database_host                  = module.rds.address
   database_port                  = module.rds.port

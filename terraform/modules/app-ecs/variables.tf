@@ -45,7 +45,7 @@ variable "minio_console_target_group_arn" {
 variable "assign_public_ip" {
   description = "Whether the ECS task gets a public IP."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "task_cpu" {
@@ -76,6 +76,11 @@ variable "api_image" {
 
 variable "worker_image" {
   description = "Full worker container image URI."
+  type        = string
+}
+
+variable "postgres_client_image" {
+  description = "Full PostgreSQL client image URI used by one-off database grants tasks."
   type        = string
 }
 
