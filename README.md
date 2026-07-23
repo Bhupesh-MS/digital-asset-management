@@ -114,6 +114,10 @@ This command uses Turbo to concurrently run the `dev` scripts in all apps and pa
 - **REST API**: `http://localhost:3000`
 - **RabbitMQ Management**: `http://localhost:15672` (u/p: dam/dam)
 - **MinIO Console**: `http://localhost:9001` (u/p: damadmin/damadmin123)
+- **Admin Login**: `admin@gmail.com` / `Admin@123`
+
+The API seeds or updates the admin user on startup. Override the default credentials with
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`.
 
 ---
 
