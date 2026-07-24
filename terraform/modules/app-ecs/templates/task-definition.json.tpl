@@ -23,6 +23,7 @@
     "image": "${rabbitmq_image}",
     "essential": true,
     "environment": ${rabbitmq_environment},
+    "secrets": ${rabbitmq_secrets},
     "portMappings": [
       { "containerPort": 5672, "protocol": "tcp" },
       { "containerPort": 15672, "protocol": "tcp" }
@@ -45,6 +46,7 @@
     "essential": true,
     "command": ["server", "/data", "--console-address", ":9001"],
     "environment": ${minio_environment},
+    "secrets": ${minio_secrets},
     "portMappings": [
       { "containerPort": 9000, "protocol": "tcp" },
       { "containerPort": 9001, "protocol": "tcp" }
@@ -59,6 +61,7 @@
     "image": "${api_image}",
     "essential": true,
     "environment": ${api_environment},
+    "secrets": ${api_secrets},
     "portMappings": [
       { "containerPort": ${api_port}, "protocol": "tcp" }
     ],
@@ -74,6 +77,7 @@
     "image": "${worker_image}",
     "essential": true,
     "environment": ${worker_environment},
+    "secrets": ${worker_secrets},
     "dependsOn": [
       { "containerName": "rabbitmq", "condition": "HEALTHY" },
       { "containerName": "minio", "condition": "START" }

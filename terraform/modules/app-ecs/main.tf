@@ -1,20 +1,15 @@
 locals {
   shared_app_environment = [
     { name = "NODE_ENV", value = "production" },
-    { name = "DATABASE_URL", value = var.database_url },
     { name = "DATABASE_SSL", value = "true" },
     { name = "DATABASE_SSL_REJECT_UNAUTHORIZED", value = "false" },
     { name = "PGSSLMODE", value = "require" },
-    { name = "RABBITMQ_URL", value = var.rabbitmq_url },
     { name = "REDIS_URL", value = var.redis_url },
     { name = "MINIO_ENDPOINT", value = var.minio_endpoint },
     { name = "MINIO_PUBLIC_ENDPOINT", value = var.minio_public_endpoint },
     { name = "MINIO_PORT", value = tostring(var.minio_port) },
     { name = "MINIO_PUBLIC_PORT", value = tostring(var.minio_public_port) },
     { name = "MINIO_BUCKET", value = var.minio_bucket },
-    { name = "MINIO_ACCESS_KEY", value = var.minio_access_key },
-    { name = "MINIO_SECRET_KEY", value = var.minio_secret_key },
-    { name = "JWT_SECRET", value = var.jwt_secret },
     { name = "CORS_ORIGIN", value = var.cors_origin },
     { name = "API_BASE_URL", value = var.api_base_url },
     { name = "API_PORT", value = tostring(var.api_port) },
@@ -31,6 +26,14 @@ locals {
     { name = "UPLOAD_STREAM_CHUNK_SIZE_BYTES", value = tostring(var.upload_stream_chunk_size_bytes) }
   ]
 
+  shared_app_secrets = [
+    { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_url.arn },
+    { name = "RABBITMQ_URL", valueFrom = aws_secretsmanager_secret.rabbitmq_url.arn },
+    { name = "MINIO_ACCESS_KEY", valueFrom = aws_secretsmanager_secret.minio_access_key.arn },
+    { name = "MINIO_SECRET_KEY", valueFrom = aws_secretsmanager_secret.minio_secret_key.arn },
+    { name = "JWT_SECRET", valueFrom = aws_secretsmanager_secret.jwt_secret.arn }
+  ]
+
   log_configuration = {
     logDriver = "awslogs"
     options = {
@@ -39,6 +42,69 @@ locals {
       awslogs-stream-prefix = "ecs"
     }
   }
+}
+
+resource "aws_secretsmanager_secret" "database_url" {
+  name = "${var.name_prefix}/ecs/database-url"
+}
+
+resource "aws_secretsmanager_secret_version" "database_url" {
+  secret_id     = aws_secretsmanager_secret.database_url.id
+  secret_string = var.database_url
+}
+
+resource "aws_secretsmanager_secret" "database_password" {
+  name = "${var.name_prefix}/ecs/database-password"
+}
+
+resource "aws_secretsmanager_secret_version" "database_password" {
+  secret_id     = aws_secretsmanager_secret.database_password.id
+  secret_string = var.database_password
+}
+
+resource "aws_secretsmanager_secret" "rabbitmq_url" {
+  name = "${var.name_prefix}/ecs/rabbitmq-url"
+}
+
+resource "aws_secretsmanager_secret_version" "rabbitmq_url" {
+  secret_id     = aws_secretsmanager_secret.rabbitmq_url.id
+  secret_string = var.rabbitmq_url
+}
+
+resource "aws_secretsmanager_secret" "rabbitmq_password" {
+  name = "${var.name_prefix}/ecs/rabbitmq-password"
+}
+
+resource "aws_secretsmanager_secret_version" "rabbitmq_password" {
+  secret_id     = aws_secretsmanager_secret.rabbitmq_password.id
+  secret_string = var.rabbitmq_password
+}
+
+resource "aws_secretsmanager_secret" "minio_access_key" {
+  name = "${var.name_prefix}/ecs/minio-access-key"
+}
+
+resource "aws_secretsmanager_secret_version" "minio_access_key" {
+  secret_id     = aws_secretsmanager_secret.minio_access_key.id
+  secret_string = var.minio_access_key
+}
+
+resource "aws_secretsmanager_secret" "minio_secret_key" {
+  name = "${var.name_prefix}/ecs/minio-secret-key"
+}
+
+resource "aws_secretsmanager_secret_version" "minio_secret_key" {
+  secret_id     = aws_secretsmanager_secret.minio_secret_key.id
+  secret_string = var.minio_secret_key
+}
+
+resource "aws_secretsmanager_secret" "jwt_secret" {
+  name = "${var.name_prefix}/ecs/jwt-secret"
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret" {
+  secret_id     = aws_secretsmanager_secret.jwt_secret.id
+  secret_string = var.jwt_secret
 }
 
 resource "aws_cloudwatch_log_group" "this" {
@@ -66,6 +132,33 @@ resource "aws_iam_role" "execution" {
 resource "aws_iam_role_policy_attachment" "execution" {
   role       = aws_iam_role.execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "execution_secrets" {
+  name = "${var.name_prefix}-ecs-secrets"
+  role = aws_iam_role.execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.database_url.arn,
+          aws_secretsmanager_secret.database_password.arn,
+          aws_secretsmanager_secret.rabbitmq_url.arn,
+          aws_secretsmanager_secret.rabbitmq_password.arn,
+          aws_secretsmanager_secret.minio_access_key.arn,
+          aws_secretsmanager_secret.minio_secret_key.arn,
+          aws_secretsmanager_secret.jwt_secret.arn
+        ]
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role" "task" {
@@ -104,11 +197,24 @@ resource "aws_ecs_task_definition" "this" {
     web_port             = var.web_port
     api_port             = var.api_port
     api_environment      = jsonencode(local.shared_app_environment)
+    api_secrets          = jsonencode(local.shared_app_secrets)
     worker_environment   = jsonencode(local.shared_app_environment)
-    rabbitmq_environment = jsonencode([{ name = "RABBITMQ_DEFAULT_USER", value = var.rabbitmq_username }, { name = "RABBITMQ_DEFAULT_PASS", value = var.rabbitmq_password }])
-    minio_environment    = jsonencode([{ name = "MINIO_ROOT_USER", value = var.minio_access_key }, { name = "MINIO_ROOT_PASSWORD", value = var.minio_secret_key }])
+    worker_secrets       = jsonencode(local.shared_app_secrets)
+    rabbitmq_environment = jsonencode([{ name = "RABBITMQ_DEFAULT_USER", value = var.rabbitmq_username }])
+    rabbitmq_secrets     = jsonencode([{ name = "RABBITMQ_DEFAULT_PASS", valueFrom = aws_secretsmanager_secret.rabbitmq_password.arn }])
+    minio_environment    = jsonencode([])
+    minio_secrets        = jsonencode([{ name = "MINIO_ROOT_USER", valueFrom = aws_secretsmanager_secret.minio_access_key.arn }, { name = "MINIO_ROOT_PASSWORD", valueFrom = aws_secretsmanager_secret.minio_secret_key.arn }])
     log_configuration    = jsonencode(local.log_configuration)
   })
+
+  depends_on = [
+    aws_secretsmanager_secret_version.database_url,
+    aws_secretsmanager_secret_version.rabbitmq_url,
+    aws_secretsmanager_secret_version.rabbitmq_password,
+    aws_secretsmanager_secret_version.minio_access_key,
+    aws_secretsmanager_secret_version.minio_secret_key,
+    aws_secretsmanager_secret_version.jwt_secret
+  ]
 
   volume {
     name = "redis-data"
@@ -169,10 +275,19 @@ resource "aws_ecs_task_definition" "migration" {
       essential        = true
       command          = ["./node_modules/.bin/prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]
       environment      = local.shared_app_environment
+      secrets          = local.shared_app_secrets
       portMappings     = []
       logConfiguration = local.log_configuration
     }
   ])
+
+  depends_on = [
+    aws_secretsmanager_secret_version.database_url,
+    aws_secretsmanager_secret_version.rabbitmq_url,
+    aws_secretsmanager_secret_version.minio_access_key,
+    aws_secretsmanager_secret_version.minio_secret_key,
+    aws_secretsmanager_secret_version.jwt_secret
+  ]
 }
 
 resource "aws_ecs_task_definition" "database_grants" {
@@ -209,15 +324,21 @@ EOT
         { name = "PGPORT", value = tostring(var.database_port) },
         { name = "PGDATABASE", value = var.database_name },
         { name = "PGUSER", value = var.database_username },
-        { name = "PGPASSWORD", value = var.database_password },
         { name = "PGCONNECT_TIMEOUT", value = "15" },
         { name = "PGSSLMODE", value = "require" },
         { name = "DB_SCHEMA", value = var.database_schema }
+      ]
+      secrets = [
+        { name = "PGPASSWORD", valueFrom = aws_secretsmanager_secret.database_password.arn }
       ]
       portMappings     = []
       logConfiguration = local.log_configuration
     }
   ])
+
+  depends_on = [
+    aws_secretsmanager_secret_version.database_password
+  ]
 }
 
 resource "aws_ecs_service" "this" {

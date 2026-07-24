@@ -676,10 +676,11 @@ Gives the VPC a path to the public internet.
 resource "aws_vpc_endpoint" "ecr_api" {}
 resource "aws_vpc_endpoint" "ecr_dkr" {}
 resource "aws_vpc_endpoint" "logs" {}
+resource "aws_vpc_endpoint" "secretsmanager" {}
 resource "aws_vpc_endpoint" "s3" {}
 ```
 
-Gives private ECS tasks access to ECR, S3, and CloudWatch Logs without assigning public IPs or using a NAT gateway.
+Gives private ECS tasks access to ECR, S3, CloudWatch Logs, and Secrets Manager without assigning public IPs or using a NAT gateway.
 
 #### Public Subnets
 
@@ -1871,10 +1872,10 @@ They use private subnets. Public browser traffic reaches the public ALB first, a
 
 Redis, RabbitMQ, MinIO, API, worker, and web all run inside one ECS task definition. This means `localhost` works between those containers inside the same task.
 
-Sensitive values are marked with:
+Sensitive Terraform input variables are marked with:
 
 ```hcl
 sensitive = true
 ```
 
-but they are still passed into ECS container environment variables. Treat Terraform state and ECS task definitions as sensitive infrastructure data.
+Terraform creates AWS Secrets Manager entries for sensitive ECS runtime values and the ECS task definitions reference them through container `secrets` blocks instead of plain environment variables. Treat Terraform state as sensitive infrastructure data because Terraform still receives the secret values from GitHub Secrets and manages the Secrets Manager versions.
