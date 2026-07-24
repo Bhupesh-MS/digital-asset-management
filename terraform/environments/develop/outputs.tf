@@ -97,3 +97,18 @@ output "ecr_postgres_client_repository_url" {
   description = "PostgreSQL client ECR repository URL used by database grants tasks."
   value       = module.ecr.repository_urls["postgres-client"]
 }
+
+output "ecr_redis_repository_url" {
+  description = "Redis ECR repository URL."
+  value       = module.ecr.repository_urls["redis"]
+}
+
+output "ecr_rabbitmq_repository_url" {
+  description = "RabbitMQ ECR repository URL."
+  value       = module.ecr.repository_urls["rabbitmq"]
+}
+
+output "ecr_minio_repository_url" {
+  description = "MinIO ECR repository URL."
+  value       = module.ecr.repository_urls["minio"]
+}

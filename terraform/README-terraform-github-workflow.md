@@ -1140,6 +1140,8 @@ resource "aws_ecs_task_definition" "database_grants" {}
 
 Defines a one-off task using the configured PostgreSQL client image. The deploy workflow builds that image from `postgres:16-alpine` and pushes it to private ECR so the task can run from private subnets without NAT.
 
+The long-running app task also uses private ECR image URIs for Redis, RabbitMQ, and MinIO. The deploy workflow pulls the pinned public images on the GitHub-hosted runner, tags them with the current commit SHA, and pushes them to private ECR before Terraform updates the ECS task definition.
+
 #### ECS Service
 
 ```hcl
@@ -1175,7 +1177,7 @@ web
 Redis:
 
 ```json
-"image": "redis:7-alpine"
+"image": "${redis_image}"
 ```
 
 Runs Redis and mounts `/data` from EFS.
@@ -1183,7 +1185,7 @@ Runs Redis and mounts `/data` from EFS.
 RabbitMQ:
 
 ```json
-"image": "rabbitmq:3-management-alpine"
+"image": "${rabbitmq_image}"
 ```
 
 Runs RabbitMQ and mounts `/var/lib/rabbitmq` from EFS.
@@ -1191,7 +1193,7 @@ Runs RabbitMQ and mounts `/var/lib/rabbitmq` from EFS.
 MinIO:
 
 ```json
-"image": "minio/minio:RELEASE.2024-12-18T13-15-44Z"
+"image": "${minio_image}"
 ```
 
 Runs MinIO with data stored at `/data`.

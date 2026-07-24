@@ -109,6 +109,9 @@ jobs:
           echo "api_repo=$(terraform output -raw ecr_api_repository_url)" >> "$GITHUB_OUTPUT"
           echo "worker_repo=$(terraform output -raw ecr_worker_repository_url)" >> "$GITHUB_OUTPUT"
           echo "postgres_client_repo=$(terraform output -raw ecr_postgres_client_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "redis_repo=$(terraform output -raw ecr_redis_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "rabbitmq_repo=$(terraform output -raw ecr_rabbitmq_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "minio_repo=$(terraform output -raw ecr_minio_repository_url)" >> "$GITHUB_OUTPUT"
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
@@ -150,6 +153,21 @@ jobs:
             .
           docker push "${{ steps.ecr.outputs.postgres_client_repo }}:${{ github.sha }}"
 
+      - name: Mirror runtime images to ECR
+        timeout-minutes: 30
+        run: |
+          docker pull redis:7-alpine
+          docker tag redis:7-alpine "${{ steps.ecr.outputs.redis_repo }}:${{ github.sha }}"
+          docker push "${{ steps.ecr.outputs.redis_repo }}:${{ github.sha }}"
+
+          docker pull rabbitmq:3-management-alpine
+          docker tag rabbitmq:3-management-alpine "${{ steps.ecr.outputs.rabbitmq_repo }}:${{ github.sha }}"
+          docker push "${{ steps.ecr.outputs.rabbitmq_repo }}:${{ github.sha }}"
+
+          docker pull minio/minio:RELEASE.2024-12-18T13-15-44Z
+          docker tag minio/minio:RELEASE.2024-12-18T13-15-44Z "${{ steps.ecr.outputs.minio_repo }}:${{ github.sha }}"
+          docker push "${{ steps.ecr.outputs.minio_repo }}:${{ github.sha }}"
+
       - name: Terraform plan
         working-directory: terraform/environments/develop
         env:
@@ -157,6 +175,9 @@ jobs:
           TF_VAR_api_image: ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}
           TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
           TF_VAR_postgres_client_image: ${{ steps.ecr.outputs.postgres_client_repo }}:${{ github.sha }}
+          TF_VAR_redis_image: ${{ steps.ecr.outputs.redis_repo }}:${{ github.sha }}
+          TF_VAR_rabbitmq_image: ${{ steps.ecr.outputs.rabbitmq_repo }}:${{ github.sha }}
+          TF_VAR_minio_image: ${{ steps.ecr.outputs.minio_repo }}:${{ github.sha }}
         run: terraform plan
 
       - name: Terraform apply
@@ -166,6 +187,9 @@ jobs:
           TF_VAR_api_image: ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}
           TF_VAR_worker_image: ${{ steps.ecr.outputs.worker_repo }}:${{ github.sha }}
           TF_VAR_postgres_client_image: ${{ steps.ecr.outputs.postgres_client_repo }}:${{ github.sha }}
+          TF_VAR_redis_image: ${{ steps.ecr.outputs.redis_repo }}:${{ github.sha }}
+          TF_VAR_rabbitmq_image: ${{ steps.ecr.outputs.rabbitmq_repo }}:${{ github.sha }}
+          TF_VAR_minio_image: ${{ steps.ecr.outputs.minio_repo }}:${{ github.sha }}
         run: terraform apply -auto-approve
 
       - name: Show load balancer URLs

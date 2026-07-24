@@ -100,7 +100,7 @@ Run the deploy workflow once more after updating those variables so the web imag
 
 ## Network Layout
 
-The `develop` VPC creates separate public and private subnets. The internet-facing ALB uses the public subnets. ECS tasks and RDS use the private subnets. ECS tasks do not receive public IPs. Private AWS service access uses VPC endpoints for ECR, S3, and CloudWatch Logs, which lets Fargate pull private ECR images and write logs without a NAT gateway. RDS uses the private subnets through the database subnet group and has `publicly_accessible = false`, so PostgreSQL is reachable only from resources inside the VPC that are allowed by the RDS security group.
+The `develop` VPC creates separate public and private subnets. The internet-facing ALB uses the public subnets. ECS tasks and RDS use the private subnets. ECS tasks do not receive public IPs. Private AWS service access uses VPC endpoints for ECR, S3, and CloudWatch Logs, which lets Fargate pull private ECR images and write logs without a NAT gateway. The deploy workflow mirrors Redis, RabbitMQ, and MinIO into private ECR before updating ECS, so the app task does not need Docker Hub access from private subnets. RDS uses the private subnets through the database subnet group and has `publicly_accessible = false`, so PostgreSQL is reachable only from resources inside the VPC that are allowed by the RDS security group.
 
 To customize the private subnet ranges, set `private_subnet_cidrs`. Keep at least two CIDR blocks in different Availability Zones so the RDS subnet group remains valid.
 

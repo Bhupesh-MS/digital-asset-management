@@ -86,6 +86,24 @@ variable "postgres_client_image" {
   default     = "postgres:16-alpine"
 }
 
+variable "redis_image" {
+  description = "Full Redis container image URI."
+  type        = string
+  default     = "redis:7-alpine"
+}
+
+variable "rabbitmq_image" {
+  description = "Full RabbitMQ container image URI."
+  type        = string
+  default     = "rabbitmq:3-management-alpine"
+}
+
+variable "minio_image" {
+  description = "Full MinIO container image URI."
+  type        = string
+  default     = "minio/minio:RELEASE.2024-12-18T13-15-44Z"
+}
+
 variable "database_name" {
   description = "RDS database name."
   type        = string
