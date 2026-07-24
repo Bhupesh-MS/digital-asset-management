@@ -84,6 +84,21 @@ variable "postgres_client_image" {
   type        = string
 }
 
+variable "redis_image" {
+  description = "Full Redis container image URI."
+  type        = string
+}
+
+variable "rabbitmq_image" {
+  description = "Full RabbitMQ container image URI."
+  type        = string
+}
+
+variable "minio_image" {
+  description = "Full MinIO container image URI."
+  type        = string
+}
+
 variable "database_url" {
   description = "Application PostgreSQL connection string."
   type        = string

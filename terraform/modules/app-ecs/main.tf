@@ -98,6 +98,9 @@ resource "aws_ecs_task_definition" "this" {
     web_image            = var.web_image
     api_image            = var.api_image
     worker_image         = var.worker_image
+    redis_image          = var.redis_image
+    rabbitmq_image       = var.rabbitmq_image
+    minio_image          = var.minio_image
     web_port             = var.web_port
     api_port             = var.api_port
     api_environment      = jsonencode(local.shared_app_environment)

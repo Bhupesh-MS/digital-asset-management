@@ -1,7 +1,7 @@
 [
   {
     "name": "redis",
-    "image": "redis:7-alpine",
+    "image": "${redis_image}",
     "essential": true,
     "portMappings": [
       { "containerPort": 6379, "protocol": "tcp" }
@@ -20,7 +20,7 @@
   },
   {
     "name": "rabbitmq",
-    "image": "rabbitmq:3-management-alpine",
+    "image": "${rabbitmq_image}",
     "essential": true,
     "environment": ${rabbitmq_environment},
     "portMappings": [
@@ -41,7 +41,7 @@
   },
   {
     "name": "minio",
-    "image": "minio/minio:RELEASE.2024-12-18T13-15-44Z",
+    "image": "${minio_image}",
     "essential": true,
     "command": ["server", "/data", "--console-address", ":9001"],
     "environment": ${minio_environment},

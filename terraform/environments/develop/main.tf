@@ -498,6 +498,9 @@ module "app_ecs" {
   api_image                      = var.api_image
   worker_image                   = var.worker_image
   postgres_client_image          = var.postgres_client_image
+  redis_image                    = var.redis_image
+  rabbitmq_image                 = var.rabbitmq_image
+  minio_image                    = var.minio_image
   database_url                   = local.database_url
   database_host                  = module.rds.address
   database_port                  = module.rds.port
